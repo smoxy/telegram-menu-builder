@@ -87,10 +87,12 @@ menu = (MenuBuilder()
 
 ### Using with ConversationHandler
 
-When integrating MenuBuilder with `python-telegram-bot`'s `ConversationHandler`, you need to properly configure the `per_message` setting:
+When integrating MenuBuilder with `python-telegram-bot`'s `ConversationHandler`, use **states** for menu navigation:
 
 ```python
 from telegram.ext import ConversationHandler, CommandHandler, CallbackQueryHandler
+
+BROWSING = 0  # Conversation state
 
 async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Command that shows paginated list."""
@@ -99,20 +101,26 @@ async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         .build())
     
     await update.message.reply_text("Page 1", reply_markup=menu)
-    return ConversationHandler.END  # Return END, but callbacks should still work
+    return BROWSING  # ✅ Keep conversation active
 
-# ✅ CORRECT: Set per_message=True when entry points return END
+# ✅ CORRECT: Use states, not fallbacks
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("list", show_list)],
-    states={},
-    fallbacks=[
-        CallbackQueryHandler(router.route)  # Handles menu navigation
-    ],
-    per_message=True  # ✅ Required for callbacks after END
+    states={
+        BROWSING: [
+            CallbackQueryHandler(router.route)  # ✅ Handles menu navigation
+        ]
+    },
+    fallbacks=[CommandHandler("cancel", cancel)],
+    per_message=False  # ✅ Default works fine
 )
 ```
 
-**Important:** If your entry points return `ConversationHandler.END` but send inline keyboards, you **must** set `per_message=True` for the fallback `CallbackQueryHandler` to work.
+**Important:** 
+- ✅ **DO** return a state from entry points (keeps conversation active)
+- ✅ **DO** put `CallbackQueryHandler` in states (not fallbacks)
+- ❌ **DON'T** return `ConversationHandler.END` if buttons need to work
+- ❌ **DON'T** use `per_message=True` with `CommandHandler` (triggers warning)
 
 See the complete guide: [Using MenuBuilder with ConversationHandler](docs/conversation_handler_guide.md)
 

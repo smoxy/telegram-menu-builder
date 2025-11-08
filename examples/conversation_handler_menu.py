@@ -1,11 +1,11 @@
 """Example using MenuBuilder with ConversationHandler.
 
 This example demonstrates how to use MenuBuilder within a ConversationHandler,
-including proper configuration of per_message settings for callback handling.
+showing the proper way to handle pagination without triggering PTBUserWarning.
 
-IMPORTANT: When using CallbackQueryHandler in ConversationHandler fallbacks,
-you MUST set per_message=True if your entry points return ConversationHandler.END
-and you want the fallback handlers to process callbacks from inline keyboards.
+SOLUTION: Keep the conversation ACTIVE (don't return END) when using 
+CommandHandler entry points. This avoids the per_message=True requirement
+and allows CommandHandler + CallbackQueryHandler to work together.
 
 See: https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do
 """
@@ -35,22 +35,24 @@ router = MenuRouter()
 # Mock data for pagination
 ITEMS = [f"Item {i}" for i in range(1, 101)]  # 100 items
 
+# Conversation states
+BROWSING = 0
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point command that shows paginated list.
     
-    Returns ConversationHandler.END because we don't need conversation state
-    for simple pagination - the fallback CallbackQueryHandler will handle
-    navigation between pages.
+    Returns BROWSING state to keep conversation active.
+    This allows the state's CallbackQueryHandler to process pagination.
     """
     logger.info("start command called")
     
     # Show first page
     await _show_page(update, context, page=0)
     
-    # Return END - no conversation state needed
-    # Fallback handlers will process pagination callbacks
-    return ConversationHandler.END
+    # Return state to keep conversation active
+    # State handlers will process pagination callbacks
+    return BROWSING
 
 
 async def _show_page(
@@ -124,39 +126,41 @@ async def handle_pagination(
 
 
 def create_conversation_handler() -> ConversationHandler:
-    """Create the ConversationHandler with proper per_message configuration.
+    """Create the ConversationHandler with proper configuration.
     
-    CRITICAL: per_message=True is REQUIRED when:
-    1. Entry points return ConversationHandler.END
-    2. You send messages with inline keyboards
-    3. You want fallback CallbackQueryHandler to process those callbacks
+    SOLUTION: Use states instead of fallbacks to avoid per_message issues.
     
-    Without per_message=True, the fallback CallbackQueryHandler will NOT
-    receive callback queries after the conversation ends.
+    Why this works:
+    1. Entry point (CommandHandler) returns a state (BROWSING)
+    2. State handlers (CallbackQueryHandler) process pagination
+    3. No per_message=True needed (default per_message=False works)
+    4. No PTBUserWarning about mixed handler types
     
-    See PTB FAQ for more details:
+    Alternative patterns:
+    - If you need per_message=True: ALL handlers must be CallbackQueryHandler
+    - If you want stateless: Use CallbackQueryHandler outside ConversationHandler
+    - If you return END: Callbacks won't work without per_message=True
+    
+    See PTB FAQ for details:
     https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do
     """
     return ConversationHandler(
         entry_points=[
-            CommandHandler("list", start)
+            CommandHandler("list", start)  # Returns BROWSING state
         ],
         states={
-            # No intermediate states needed for simple pagination
+            BROWSING: [
+                # This handles all menu navigation callbacks
+                CallbackQueryHandler(router.route)
+            ]
         },
         fallbacks=[
-            # This handles all menu navigation callbacks
-            CallbackQueryHandler(router.route)
+            CommandHandler("cancel", cancel)  # Allow user to exit
         ],
         name="pagination_menu",
         persistent=False,
-        # ✅ REQUIRED: per_message=True for CallbackQueryHandler in fallbacks
-        # when entry points return END
-        per_message=True,
-        # Alternative patterns if you don't want per_message=True:
-        # 1. Don't return END from entry points (keep conversation active)
-        # 2. Use CallbackQueryHandler outside ConversationHandler
-        # 3. Use intermediate states instead of fallbacks
+        # ✅ per_message=False (default) works fine with this pattern
+        # per_message=False,  # Default value, no need to specify
     )
 
 

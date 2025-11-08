@@ -67,67 +67,132 @@ conv_handler = ConversationHandler(
 4. ❌ User clicks "Next" → **Nothing happens**
 5. ❌ `CallbackQueryHandler` in fallbacks **never receives the callback**
 
-### The Solution
+### The Solution (Recommended)
 
-Set `per_message=True`:
+**Keep conversation active** by returning a state instead of `END`:
 
 ```python
+BROWSING = 0
+
+async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Command that shows a paginated list."""
+    menu = (
+        MenuBuilder()
+        .add_item("Next ➡️", handler="paginate", page=1)
+        .build()
+    )
+    
+    await update.message.reply_text("Page 1", reply_markup=menu)
+    
+    # Return state to keep conversation active
+    return BROWSING
+
+# ✅ CORRECT: Use states, not fallbacks
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("list", show_list)],
-    states={},
+    states={
+        BROWSING: [
+            CallbackQueryHandler(router.route)  # Handles pagination
+        ]
+    },
     fallbacks=[
-        CallbackQueryHandler(router.route)
+        CommandHandler("cancel", cancel)
     ],
-    per_message=True  # ✅ REQUIRED for callbacks after END
+    per_message=False  # ✅ Default works fine!
 )
 ```
 
 **Now it works:**
 1. ✅ User sends `/list`
-2. ✅ `show_list` executes and returns `END`
+2. ✅ `show_list` executes and returns `BROWSING` state
 3. ✅ Message with "Next" button is sent
 4. ✅ User clicks "Next" → Callback is processed
-5. ✅ `CallbackQueryHandler` in fallbacks receives the callback
+5. ✅ `CallbackQueryHandler` in `BROWSING` state receives the callback
+
+### Alternative Solution: per_message=True
+
+If you **must** return `END` and use fallbacks, you need `per_message=True`:
+
+```python
+# ⚠️ WARNING: This triggers PTBUserWarning with CommandHandler
+conv_handler = ConversationHandler(
+    entry_points=[CommandHandler("list", show_list)],  # ❌ Not a CallbackQueryHandler
+    states={},
+    fallbacks=[CallbackQueryHandler(router.route)],
+    per_message=True  # ⚠️ Causes warning with CommandHandler
+)
+```
+
+**Problem:** You'll get:
+```
+PTBUserWarning: If 'per_message=True', all entry points, state handlers, 
+and fallbacks must be 'CallbackQueryHandler'
+```
+
+**Solution if you need per_message=True:**
+```python
+# ✅ Use only CallbackQueryHandler (no CommandHandler)
+conv_handler = ConversationHandler(
+    entry_points=[
+        CallbackQueryHandler(start_from_button, pattern="^start$")  # ✅ All callbacks
+    ],
+    states={},
+    fallbacks=[
+        CallbackQueryHandler(router.route)
+    ],
+    per_message=True  # ✅ No warning
+)
+```
+
+**Recommendation:** Use the first solution (states with `per_message=False`) - it's simpler and more flexible.
 
 ---
 
 ## Common Patterns
 
-### Pattern 1: Pagination (Stateless)
+### Pattern 1: Pagination (Stateful - Recommended)
 
-**Use Case**: Display paginated data where each page is independent.
+**Use Case**: Display paginated data where navigation should work seamlessly.
 
 **Configuration**:
 ```python
+BROWSING = 0
+
 ConversationHandler(
-    entry_points=[CommandHandler("list", show_first_page)],
-    states={},
-    fallbacks=[CallbackQueryHandler(router.route)],
-    per_message=True  # ✅ Required
+    entry_points=[CommandHandler("list", show_first_page)],  # Returns BROWSING
+    states={
+        BROWSING: [CallbackQueryHandler(router.route)]
+    },
+    fallbacks=[CommandHandler("cancel", cancel)],
+    per_message=False  # ✅ Default works fine
 )
 ```
 
-**Why**: Entry point returns `END`, but pagination buttons need to work.
+**Why**: Conversation stays active, callbacks work in state handlers.
 
 **Example**: See `examples/conversation_handler_menu.py`
 
 ---
 
-### Pattern 2: Settings Menu (Stateless)
+### Pattern 2: Settings Menu (Stateful)
 
-**Use Case**: Display a settings menu where each option is independent.
+**Use Case**: Display a settings menu where navigation should persist.
 
 **Configuration**:
 ```python
+SETTINGS = 0
+
 ConversationHandler(
-    entry_points=[CommandHandler("settings", show_settings)],
-    states={},
-    fallbacks=[CallbackQueryHandler(router.route)],
-    per_message=True  # ✅ Required
+    entry_points=[CommandHandler("settings", show_settings)],  # Returns SETTINGS
+    states={
+        SETTINGS: [CallbackQueryHandler(router.route)]
+    },
+    fallbacks=[CommandHandler("done", done)],
+    per_message=False  # ✅ Default works fine
 )
 ```
 
-**Why**: Settings command returns `END`, but toggle buttons need to work.
+**Why**: Settings navigation works within the SETTINGS state.
 
 ---
 
@@ -156,29 +221,57 @@ ConversationHandler(
 
 ### Pattern 4: Hybrid (Mixed)
 
-**Use Case**: Some states are stateful, some buttons work outside states.
+**Use Case**: Some states are stateful, navigation works throughout.
 
 **Configuration**:
 ```python
-EDITING = range(1)
+BROWSING, EDITING = range(2)
 
 ConversationHandler(
-    entry_points=[CommandHandler("edit", show_edit_menu)],
+    entry_points=[CommandHandler("edit", show_edit_menu)],  # Returns BROWSING
     states={
+        BROWSING: [
+            CallbackQueryHandler(router.route, pattern="^menu_")
+        ],
         EDITING: [
             MessageHandler(filters.TEXT, handle_edit_input),
             CallbackQueryHandler(router.route, pattern="^edit_")
         ]
     },
     fallbacks=[
-        CallbackQueryHandler(router.route, pattern="^menu_"),  # Outside states
         CommandHandler("cancel", cancel)
     ],
-    per_message=True  # ✅ Required for fallback callbacks
+    per_message=False  # ✅ Default works fine
 )
 ```
 
-**Why**: Fallback callbacks need to work after some handlers return `END`.
+**Why**: All callbacks are handled in states, not fallbacks.
+
+---
+
+### Pattern 5: Button-Only Menu (per_message=True)
+
+**Use Case**: Entire bot is button-driven, no text commands in conversation.
+
+**Configuration**:
+```python
+ConversationHandler(
+    entry_points=[
+        CallbackQueryHandler(start_menu, pattern="^start$")  # ✅ Only callbacks
+    ],
+    states={
+        MENU: [
+            CallbackQueryHandler(router.route)  # ✅ Only callbacks
+        ]
+    },
+    fallbacks=[
+        CallbackQueryHandler(go_back, pattern="^back$")  # ✅ Only callbacks
+    ],
+    per_message=True  # ✅ Safe - all handlers are CallbackQueryHandler
+)
+```
+
+**Why**: When ALL handlers are `CallbackQueryHandler`, `per_message=True` works without warnings.
 
 ---
 
@@ -186,83 +279,101 @@ ConversationHandler(
 
 ### ✅ DO
 
-1. **Set `per_message=True`** when:
-   - Entry points return `ConversationHandler.END`
-   - You send inline keyboards from entry points
-   - You want fallback `CallbackQueryHandler` to process callbacks
-
-2. **Document the setting** in code comments:
+1. **Use states instead of fallbacks** for menu callbacks:
    ```python
+   # ✅ GOOD - Callbacks in states
    ConversationHandler(
-       # ...
-       per_message=True,  # Required: entry points return END but send keyboards
+       entry_points=[CommandHandler("list", show_list)],  # Returns state
+       states={
+           BROWSING: [CallbackQueryHandler(router.route)]
+       }
    )
    ```
 
-3. **Test both paths**:
-   - Send command and immediately click button
-   - Send command, end conversation, then click button
-
-4. **Use clear callback patterns**:
+2. **Keep conversation active** when users are navigating:
    ```python
-   fallbacks=[
-       CallbackQueryHandler(router.route, pattern="^menu_"),  # Only menu callbacks
-       CommandHandler("cancel", cancel)  # Other fallbacks
-   ]
+   async def show_list(...) -> int:
+       # Show menu
+       return BROWSING  # ✅ Keep state active
+   ```
+
+3. **Document your conversation flow** in code comments:
+   ```python
+   ConversationHandler(
+       # Entry -> BROWSING (user navigates pages)
+       # BROWSING -> END (user clicks "Done")
+   )
+   ```
+
+4. **Use `per_message=False`** (default) with `CommandHandler` entry points:
+   ```python
+   ConversationHandler(
+       entry_points=[CommandHandler("start", start)],
+       # per_message=False,  # Default - works with CommandHandler
+   )
    ```
 
 ### ❌ DON'T
 
-1. **Don't assume default works**:
+1. **Don't return END if you need callbacks to work**:
    ```python
-   # ❌ BAD - Callback won't work after END
+   # ❌ BAD - Callbacks won't work in fallbacks with per_message=False
+   async def show_list(...) -> int:
+       # Show menu with buttons
+       return ConversationHandler.END  # ❌ Buttons won't work
+   
    ConversationHandler(
-       entry_points=[CommandHandler("list", returns_end)],
-       fallbacks=[CallbackQueryHandler(router.route)]
-       # Missing: per_message=True
+       entry_points=[CommandHandler("list", show_list)],
+       fallbacks=[CallbackQueryHandler(router.route)]  # ❌ Won't receive callbacks
    )
    ```
 
-2. **Don't mix incompatible handlers** with `per_message=True`:
+2. **Don't mix CommandHandler with per_message=True**:
    ```python
-   # ⚠️ WARNING - Will raise PTBUserWarning
+   # ❌ BAD - Triggers PTBUserWarning
    ConversationHandler(
        entry_points=[
-           CommandHandler("start", cmd_handler),  # Not a CallbackQueryHandler
+           CommandHandler("start", cmd_handler),  # ❌ Not a CallbackQueryHandler
        ],
-       per_message=True  # Requires all handlers to be CallbackQueryHandler
+       per_message=True  # ❌ Requires all handlers to be CallbackQueryHandler
    )
    ```
    
-   **Solution**: If you need `per_message=True`, use `CallbackQueryHandler` for entry points:
+   **Solution**: Use states with default `per_message=False`:
    ```python
    # ✅ GOOD
-   ConversationHandler(
-       entry_points=[
-           CallbackQueryHandler(start_from_button, pattern="^start$")
-       ],
-       per_message=True
-   )
-   ```
-   
-   Or keep `per_message=False` and use active states instead of fallbacks:
-   ```python
-   # ✅ ALTERNATIVE
    ConversationHandler(
        entry_points=[CommandHandler("start", cmd_handler)],
        states={
            ACTIVE: [CallbackQueryHandler(router.route)]
        },
-       per_message=False  # OK - handlers work within states
+       per_message=False  # ✅ OK - default
    )
    ```
 
-3. **Don't ignore warnings**:
+3. **Don't use fallbacks for menu navigation**:
+   ```python
+   # ❌ BAD - Fallbacks are for escaping, not navigation
+   ConversationHandler(
+       states={...},
+       fallbacks=[
+           CallbackQueryHandler(router.route)  # ❌ Use states instead
+       ]
+   )
    ```
-   PTBUserWarning: If 'per_message=False', 'CallbackQueryHandler' will not be 
-   tracked for every message.
+   
+   **Solution**: Put callbacks in states:
+   ```python
+   # ✅ GOOD
+   ConversationHandler(
+       states={
+           MENU: [CallbackQueryHandler(router.route)]  # ✅ In state
+       },
+       fallbacks=[
+           CommandHandler("cancel", cancel)  # ✅ Escape command
+       ]
+   )
    ```
-   This warning means your callbacks might not work as expected.
 
 ---
 
@@ -276,23 +387,22 @@ ConversationHandler(
 - ❌ Clicking button does nothing
 - ❌ No handler logs
 
-**Solution**: Set `per_message=True`
+**Solution**: Use states, not fallbacks:
 
-**Debug checklist**:
 ```python
-# 1. Check if entry point returns END
+BROWSING = 0
+
+# ✅ CORRECT
 async def my_command(...) -> int:
-    # ...
-    return ConversationHandler.END  # ← This is the issue
+    # Show menu
+    return BROWSING  # Keep conversation active
 
-# 2. Check if you send inline keyboard
-menu = MenuBuilder().add_item(...).build()
-await update.message.reply_text(..., reply_markup=menu)  # ← And this
-
-# 3. Check per_message setting
 ConversationHandler(
-    # ...
-    per_message=False  # ← This must be True!
+    entry_points=[CommandHandler("list", my_command)],
+    states={
+        BROWSING: [CallbackQueryHandler(router.route)]  # ✅ Callbacks work here
+    },
+    per_message=False  # Default
 )
 ```
 
@@ -353,39 +463,41 @@ fallbacks=[
 ### Issue 4: State Not Persisting
 
 **Symptoms**:
-- User navigates menu, state resets
-- Context data lost between clicks
+- User navigates menu, unexpected behavior
+- Context data accessible throughout navigation
 
-**Cause**: Using `per_message=True` when state needed
+**Cause**: This is actually **correct** behavior with states!
 
-**Solution**: Keep conversation active (don't return `END`):
+**Explanation**: When using states (recommended pattern), conversation stays active:
 ```python
-BROWSING = range(1)
+BROWSING = 0
 
 async def show_menu(...) -> int:
     # ...
-    return BROWSING  # Keep state active
+    return BROWSING  # State persists
 
 ConversationHandler(
     entry_points=[CommandHandler("menu", show_menu)],
     states={
         BROWSING: [CallbackQueryHandler(router.route)]
     },
-    per_message=False  # OK - conversation stays active
+    per_message=False  # Conversation stays active until END
 )
 ```
+
+This allows `context.user_data` to persist across navigation, which is usually desired.
 
 ---
 
 ## Summary Table
 
-| Pattern | Entry Returns | Keyboards? | Fallback Callbacks? | per_message |
-|---------|--------------|------------|---------------------|-------------|
-| Pagination | `END` | ✅ Yes | ✅ Yes | `True` ✅ |
-| Settings Menu | `END` | ✅ Yes | ✅ Yes | `True` ✅ |
-| Multi-Step Form | State | ❌ No | ❌ No | `False` ✅ |
-| Inline Menu | State | ✅ Yes | ❌ No (in states) | `False` ✅ |
-| Mixed | `END` or State | ✅ Yes | ✅ Yes | `True` ✅ |
+| Pattern | Entry Returns | Keyboards? | Handler Location | per_message | Warning? |
+|---------|--------------|------------|------------------|-------------|----------|
+| Stateful Navigation (✅ Recommended) | State | ✅ Yes | States | `False` ✅ | No |
+| Multi-Step Form | State | ❌ No | States | `False` ✅ | No |
+| Button-Only Bot | State | ✅ Yes | States + Entry (all callbacks) | `True` ✅ | No |
+| ❌ END + Fallbacks + Command | `END` | ✅ Yes | Fallbacks | `False` ❌ | ⚠️ Callbacks don't work |
+| ❌ END + Fallbacks + Command | `END` | ✅ Yes | Fallbacks | `True` ❌ | ⚠️ PTBUserWarning |
 
 ---
 
