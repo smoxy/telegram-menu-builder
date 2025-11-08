@@ -85,6 +85,37 @@ menu = (MenuBuilder()
     .build())
 ```
 
+### Using with ConversationHandler
+
+When integrating MenuBuilder with `python-telegram-bot`'s `ConversationHandler`, you need to properly configure the `per_message` setting:
+
+```python
+from telegram.ext import ConversationHandler, CommandHandler, CallbackQueryHandler
+
+async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Command that shows paginated list."""
+    menu = (MenuBuilder()
+        .add_item("Next ➡️", handler="paginate", page=1)
+        .build())
+    
+    await update.message.reply_text("Page 1", reply_markup=menu)
+    return ConversationHandler.END  # Return END, but callbacks should still work
+
+# ✅ CORRECT: Set per_message=True when entry points return END
+conv_handler = ConversationHandler(
+    entry_points=[CommandHandler("list", show_list)],
+    states={},
+    fallbacks=[
+        CallbackQueryHandler(router.route)  # Handles menu navigation
+    ],
+    per_message=True  # ✅ Required for callbacks after END
+)
+```
+
+**Important:** If your entry points return `ConversationHandler.END` but send inline keyboards, you **must** set `per_message=True` for the fallback `CallbackQueryHandler` to work.
+
+See the complete guide: [Using MenuBuilder with ConversationHandler](docs/conversation_handler_guide.md)
+
 ### Submenu Navigation
 
 ```python
@@ -214,12 +245,17 @@ pre-commit run --all-files
 
 ## 📖 Documentation
 
-Full documentation is available at: [https://telegram-menu-builder.readthedocs.io](https://telegram-menu-builder.readthedocs.io)
+Full documentation is available in the `docs/` directory:
 
-- [API Reference](docs/api_reference.md)
-- [Advanced Usage](docs/advanced.md)
-- [Storage Backends](docs/storage.md)
-- [Migration Guide](docs/migration.md)
+- [Quick Start Guide](docs/quickstart.md)
+- [Development Guide](docs/development.md)
+- [ConversationHandler Integration](docs/conversation_handler_guide.md) ⭐ **New in 0.1.1**
+
+### Examples
+
+- [Simple Menu](examples/simple_menu.py) - Basic menu creation
+- [Advanced Menu](examples/advanced_menu.py) - Multi-level menus with pagination
+- [ConversationHandler Menu](examples/conversation_handler_menu.py) - Integration with ConversationHandler ⭐ **New in 0.1.1**
 
 ## 🤝 Contributing
 
