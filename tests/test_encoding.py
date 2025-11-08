@@ -1,10 +1,12 @@
 """Test suite for encoding/decoding functionality."""
 
+import asyncio
+
 import pytest
 
 from telegram_menu_builder.encoding import CallbackEncoder, estimate_encoded_size
-from telegram_menu_builder.types import MenuAction, EncodingError, DecodingError
 from telegram_menu_builder.storage import MemoryStorage
+from telegram_menu_builder.types import DecodingError, MenuAction
 
 
 class TestCallbackEncoder:
@@ -73,7 +75,7 @@ class TestCallbackEncoder:
         encoded = await encoder.encode(action)
 
         # Should use storage (starts with S: or P:)
-        assert encoded.startswith("S:") or encoded.startswith("P:")
+        assert encoded.startswith(("S:", "P:"))
 
     @pytest.mark.asyncio
     async def test_decode_invalid_data_raises_error(self, encoder):
@@ -92,17 +94,15 @@ class TestCallbackEncoder:
         encoded = await encoder.encode(action)
 
         # Verify it's using storage (not inline)
-        if encoded.startswith("I") or encoded.startswith("IC"):
+        if encoded.startswith(("I", "IC")):
             # If inline, we can't test expiration, so skip
             pytest.skip("Data was encoded inline, cannot test expiration")
 
         # Wait for expiration
-        import asyncio
-
         await asyncio.sleep(2)
 
         # Should raise DecodingError
-        with pytest.raises(DecodingError, match="expired|not found"):
+        with pytest.raises(DecodingError, match=r"expired|not found"):
             await encoder.decode(encoded)
 
     @pytest.mark.asyncio
@@ -114,7 +114,7 @@ class TestCallbackEncoder:
         encoded = await encoder.encode(action)
 
         # Should be in storage (check if it starts with S: or P:)
-        if encoded.startswith("S:") or encoded.startswith("P:"):
+        if encoded.startswith(("S:", "P:")):
             key = encoded[2:]  # Remove prefix
             assert await encoder.storage.exists(key)
 

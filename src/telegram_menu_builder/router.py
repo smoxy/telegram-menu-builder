@@ -148,7 +148,9 @@ class MenuRouter:
         """
         self._default_handler = func
 
-    async def route(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def route(  # noqa: PLR0912
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         """Route a callback query to the appropriate handler.
 
         This is the main entry point that should be registered with

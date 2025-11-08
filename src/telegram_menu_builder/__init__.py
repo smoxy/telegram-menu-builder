@@ -47,18 +47,15 @@ __author__ = "Simone Flavio Paris"
 __license__ = "MIT"
 
 __all__ = [
-    # Main builder
-    "MenuBuilder",
-    # Core types
     "CallbackData",
     "LayoutConfig",
-    "MenuItem",
-    "MenuAction",
-    "NavigationConfig",
-    "StorageStrategy",
-    # Router
-    "MenuRouter",
-    # Storage
-    "StorageBackend",
     "MemoryStorage",
+    "MenuAction",
+    "MenuBuilder",
+    "MenuItem",
+    "MenuRouter",
+    "NavigationConfig",
+    "StorageBackend",
+    "StorageStrategy",
 ]
+

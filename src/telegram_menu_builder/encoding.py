@@ -123,9 +123,7 @@ class CallbackEncoder:
         """
         try:
             # Check prefix to determine decoding strategy
-            if callback_data.startswith(self.PREFIX_INLINE_COMPRESSED) or callback_data.startswith(
-                self.PREFIX_INLINE
-            ):
+            if callback_data.startswith((self.PREFIX_INLINE_COMPRESSED, self.PREFIX_INLINE)):
                 data = self._decode_inline(callback_data)
             elif callback_data.startswith(self.PREFIX_SHORT):
                 key = callback_data[len(self.PREFIX_SHORT) :]

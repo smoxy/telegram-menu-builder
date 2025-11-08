@@ -4,6 +4,7 @@ This module provides the main MenuBuilder class that implements the builder patt
 for creating complex, nested inline keyboard menus with ease.
 """
 
+import asyncio
 from collections.abc import Sequence
 from typing import Any, Self
 
@@ -278,8 +279,6 @@ class MenuBuilder:
             >>> menu = builder.build()
             >>> await update.message.reply_text("Choose:", reply_markup=menu)
         """
-        import asyncio
-
         # Run async build in event loop
         try:
             loop = asyncio.get_event_loop()
@@ -336,8 +335,6 @@ class MenuBuilder:
 
         This is a helper that runs the async encoding synchronously.
         """
-        import asyncio
-
         try:
             loop = asyncio.get_running_loop()
             # Already in an async context, defer encoding to build time

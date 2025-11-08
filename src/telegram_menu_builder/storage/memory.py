@@ -4,6 +4,7 @@ This module provides a simple in-memory storage backend suitable for testing
 and applications that don't require persistent storage across restarts.
 """
 
+import fnmatch
 import time
 from typing import Any
 
@@ -78,11 +79,10 @@ class MemoryStorage(BaseStorage):
             return None
 
         # Check if expired
-        if key in self._expiry:
-            if time.time() > self._expiry[key]:
-                # Expired - clean up and return None
-                await self.delete(key)
-                return None
+        if key in self._expiry and time.time() > self._expiry[key]:
+            # Expired - clean up and return None
+            await self.delete(key)
+            return None
 
         # Return a copy to prevent external modifications
         return self._data[key].copy()
@@ -129,11 +129,10 @@ class MemoryStorage(BaseStorage):
             return False
 
         # Check expiration
-        if key in self._expiry:
-            if time.time() > self._expiry[key]:
-                # Expired - clean up
-                await self.delete(key)
-                return False
+        if key in self._expiry and time.time() > self._expiry[key]:
+            # Expired - clean up
+            await self.delete(key)
+            return False
 
         return True
 
@@ -177,8 +176,6 @@ class MemoryStorage(BaseStorage):
             return all_keys
 
         # Simple glob pattern matching
-        import fnmatch
-
         return [key for key in all_keys if fnmatch.fnmatch(key, pattern)]
 
     async def cleanup_expired(self) -> int:

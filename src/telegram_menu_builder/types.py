@@ -4,6 +4,7 @@ This module contains all the fundamental data structures used throughout the lib
 implemented with Pydantic v2 for validation and type safety.
 """
 
+import json
 from collections.abc import Awaitable, Callable
 from enum import Enum
 from typing import Any, Literal
@@ -70,8 +71,6 @@ class MenuAction(BaseModel):
     @classmethod
     def validate_params_serializable(cls, v: dict[str, Any]) -> dict[str, Any]:
         """Validate that params contain only JSON-serializable values."""
-        import json
-
         try:
             json.dumps(v)
         except (TypeError, ValueError) as e:
