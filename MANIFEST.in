@@ -1,0 +1,30 @@
+# Include package data
+include LICENSE
+include README.md
+include CONTRIBUTING.md
+include pyproject.toml
+
+# Include type information
+include src/telegram_menu_builder/py.typed
+
+# Include documentation
+recursive-include docs *.md *.rst
+
+# Include examples
+recursive-include examples *.py
+
+# Exclude development files
+exclude .pre-commit-config.yaml
+exclude .editorconfig
+exclude .gitignore
+exclude Makefile
+exclude mypy.ini
+exclude pyrightconfig.json
+
+# Exclude tests
+recursive-exclude tests *
+
+# Exclude build artifacts
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store

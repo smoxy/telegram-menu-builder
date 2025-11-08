@@ -1,0 +1,85 @@
+{
+  "include": [
+    "src/**/*.py",
+    "tests/**/*.py"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.mypy_cache",
+    "**/node_modules",
+    ".venv",
+    "venv",
+    "build",
+    "dist"
+  ],
+  "strict": [
+    "src/**/*.py"
+  ],
+  "pythonVersion": "3.12",
+  "pythonPlatform": "All",
+  "typeCheckingMode": "strict",
+  
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "warning",
+  "reportMissingTypeArgument": "error",
+  "reportMissingParameterType": "error",
+  "reportUnknownParameterType": "error",
+  "reportUnknownVariableType": "warning",
+  "reportUnknownMemberType": "warning",
+  "reportUnknownArgumentType": "warning",
+  
+  "reportPrivateUsage": "warning",
+  "reportTypeCommentUsage": "error",
+  "reportConstantRedefinition": "error",
+  "reportIncompatibleMethodOverride": "error",
+  "reportIncompatibleVariableOverride": "error",
+  
+  "reportUnusedImport": "warning",
+  "reportUnusedClass": "warning",
+  "reportUnusedFunction": "warning",
+  "reportUnusedVariable": "warning",
+  "reportDuplicateImport": "error",
+  
+  "reportOptionalSubscript": "error",
+  "reportOptionalMemberAccess": "error",
+  "reportOptionalCall": "error",
+  "reportOptionalIterable": "error",
+  "reportOptionalContextManager": "error",
+  "reportOptionalOperand": "error",
+  
+  "reportUntypedFunctionDecorator": "error",
+  "reportUntypedClassDecorator": "error",
+  "reportUntypedBaseClass": "error",
+  "reportUntypedNamedTuple": "error",
+  
+  "reportCallInDefaultInitializer": "warning",
+  "reportUnnecessaryIsInstance": "warning",
+  "reportUnnecessaryCast": "warning",
+  "reportUnnecessaryComparison": "warning",
+  "reportImplicitStringConcatenation": "warning",
+  "reportInvalidStringEscapeSequence": "error",
+  
+  "reportImportCycles": "warning",
+  "reportPropertyTypeMismatch": "error",
+  "reportFunctionMemberAccess": "error",
+  "reportInvalidTypeVarUse": "error",
+  "reportOverlappingOverload": "error",
+  
+  "reportMatchNotExhaustive": "warning",
+  "reportShadowedImports": "error",
+  
+  "useLibraryCodeForTypes": true,
+  "strictListInference": true,
+  "strictDictionaryInference": true,
+  "strictSetInference": true,
+  "strictParameterNoneValue": true,
+  
+  "enableTypeIgnoreComments": true,
+  "enableExperiments": false,
+  
+  "venvPath": ".",
+  "venv": ".venv",
+  
+  "extraPaths": ["src"]
+}
