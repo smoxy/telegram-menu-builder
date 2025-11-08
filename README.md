@@ -271,7 +271,36 @@ This project is currently in **alpha** stage. APIs may change before 1.0.0 relea
 - 📅 Template system (planned)
 - 📅 Form wizard support (planned)
 
-## 💬 Support
+## � Publishing to PyPI
+
+If you want to contribute or publish your own fork:
+
+### Build the Package
+
+```bash
+# Install build tools
+pip install build twine
+
+# Build distribution files
+python -m build
+
+# Verify the build
+twine check dist/*
+```
+
+### Upload to PyPI
+
+See [PYPI_CONFIG.md](PYPI_CONFIG.md) for detailed instructions on configuring your PyPI token.
+
+```bash
+# Using the provided script
+python upload_to_pypi.py
+
+# Or manually
+twine upload dist/*
+```
+
+## �💬 Support
 
 - 📫 Report bugs: [GitHub Issues](https://github.com/smoxy/telegram-menu-builder/issues)
 - 💡 Request features: [GitHub Discussions](https://github.com/smoxy/telegram-menu-builder/discussions)
