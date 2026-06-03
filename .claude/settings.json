@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(black:*)",
+      "Bash(mypy:*)",
+      "Bash(pyright:*)",
+      "Bash(pre-commit run:*)",
+      "Bash(pip-audit:*)",
+      "Bash(python -m build:*)",
+      "Bash(twine check:*)",
+      "Bash(mkdocs build:*)",
+      "Bash(mkdocs serve:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git tag:*)"
+    ],
+    "deny": [
+      "Bash(twine upload:*)",
+      "Bash(mkdocs gh-deploy:*)",
+      "Bash(git push:*)",
+      "Bash(pip install:*)"
+    ]
+  }
+}
