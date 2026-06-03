@@ -1,387 +1,194 @@
 # Telegram Menu Builder
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Type Checked: pyright](https://img.shields.io/badge/type%20checked-pyright-blue)](https://github.com/microsoft/pyright)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![PyPI version](https://img.shields.io/pypi/v/telegram-menu-builder.svg)](https://pypi.org/project/telegram-menu-builder/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](docs/python-compatibility.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/smoxy/telegram-menu-builder/actions/workflows/ci.yml/badge.svg)](https://github.com/smoxy/telegram-menu-builder/actions/workflows/ci.yml)
+[![Type checked: mypy + pyright](https://img.shields.io/badge/types-mypy%20%2B%20pyright-blue)](https://github.com/microsoft/pyright)
 [![Linting: ruff](https://img.shields.io/badge/linting-ruff-red)](https://github.com/astral-sh/ruff)
 
-A powerful, type-safe Python library for creating recursive inline keyboard menus in [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) v20+.
+A type-safe, async-first Python library for building recursive **inline keyboard menus** in
+[python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) v20+. You declare
+buttons with a fluent `MenuBuilder`, the library encodes each callback payload to fit Telegram's
+64-byte limit (compressing inline or spilling to pluggable storage), and a `MenuRouter` decodes
+incoming callbacks and dispatches them to your handlers.
+
+📖 **Documentation:** <https://smoxy.github.io/telegram-menu-builder/> — or jump to the
+[doc index below](#-documentation).
+
+> **Status:** alpha (`0.x`). The API may change before `1.0`. See the [changelog](CHANGELOG.md).
 
 ## ✨ Features
 
-- 🏗️ **Builder Pattern API** - Intuitive, fluent interface for menu construction
-- 🔐 **Type-Safe** - Full type hints with Python 3.12+, validated with Pyright
-- 📦 **Smart Callback Encoding** - Automatically handles Telegram's 64-byte limit
-- 💾 **Hybrid Storage** - Inline, temporary (Redis), and persistent (SQL) strategies
-- 🔄 **Unlimited Nesting** - Create complex multi-level menus with breadcrumb support
-- ⚡ **Async-First** - Built for modern async/await patterns
-- 🧩 **Pluggable Storage** - Bring your own storage backend
-- 🎨 **Flexible Layouts** - Grid layouts, custom columns, navigation buttons
-- 🧪 **Well Tested** - Comprehensive test suite with 90%+ coverage
+- 🏗️ **Fluent builder API** — chainable, readable menu construction.
+- 📦 **Smart callback encoding** — automatic inline / short-term / persistent strategy to stay
+  under Telegram's 64-byte limit, with zlib compression and deduplication.
+- 🧭 **Routing & middleware** — `MenuRouter` dispatches callbacks to named handlers with
+  `before` / `after` / `on_error` hooks and handler groups.
+- 🔄 **Unlimited nesting** — submenus and navigation (back / next / exit / cancel) buttons.
+- 🧩 **Pluggable storage** — an in-memory backend is included; implement the `StorageBackend`
+  protocol (or subclass `BaseStorage`) for Redis, SQL, etc.
+- 🔐 **Strict typing** — full type hints, validated with both `mypy --strict` and `pyright`
+  (Pydantic v2 models), shipped with `py.typed`.
+- 🧪 **Well tested** — ~90% coverage, CI on every push and pull request.
 
-## 🚀 Quick Start
-
-### Installation
+## 🚀 Quick start
 
 ```bash
 pip install telegram-menu-builder
 ```
 
-### Basic Usage
+Optional extras: `telegram-menu-builder[redis]`, `[sql]`, `[dev]`, `[docs]`. See
+[Installation](docs/installation.md).
 
 ```python
 from telegram import Update
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes
 from telegram_menu_builder import MenuBuilder, MenuRouter
 
-# Create a menu
-async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    menu = (MenuBuilder()
-        .add_item("🌍 Language", handler="set_language")
-        .add_item("👤 Profile", handler="edit_profile")
-        .add_item("🔔 Notifications", handler="notifications")
-        .columns(2)
-        .add_back_button()
-        .build())
-    
-    await update.message.reply_text("⚙️ Settings", reply_markup=menu)
-
-# Route callbacks
 router = MenuRouter()
 
-@router.handler("set_language")
-async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, data: dict) -> None:
-    # Handle language selection
-    pass
 
-# Register with application
+async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    menu = (
+        MenuBuilder()
+        .add_item("🌍 Language", handler="set_language")
+        .add_item("👤 Profile", handler="edit_profile", user_id=update.effective_user.id)
+        .columns(2)
+        .add_back_button()
+        .build()
+    )
+    await update.message.reply_text("⚙️ Settings", reply_markup=menu)
+
+
+@router.handler("set_language")
+async def handle_language(update: Update, context: ContextTypes.DEFAULT_TYPE, params: dict) -> None:
+    # `params` are the values you passed to add_item(...), decoded from the callback.
+    await update.callback_query.edit_message_text("Choose a language…")
+
+
 app = Application.builder().token("YOUR_TOKEN").build()
 app.add_handler(CallbackQueryHandler(router.route))
+app.run_polling()
 ```
 
-## 📚 Advanced Examples
+> **Tip:** in `async` code, prefer `await builder.build_async()`. `build()` is a synchronous
+> convenience wrapper (it also works inside a running event loop). See
+> [Building menus](docs/guide/menu-building.md#build-vs-build_async).
 
-### Multi-Level Menus with Parameters
+## 📚 Examples at a glance
+
+**Buttons carry arbitrary parameters** — they are encoded into the callback and decoded back into
+the `params` dict your handler receives:
 
 ```python
-menu = (MenuBuilder()
-    .add_item(
-        "📝 Edit User",
-        handler="edit_user",
-        user_id=123,
-        field="email",
-        breadcrumb=["settings", "users"],
-        validation_required=True
-    )
-    .add_item(
-        "🗑️ Delete User",
-        handler="delete_user",
-        user_id=123,
-        confirm=True
-    )
+menu = (
+    MenuBuilder()
+    .add_item("📝 Edit", handler="edit_user", user_id=123, field="email")
+    .add_item("🗑️ Delete", handler="delete_user", user_id=123, confirm=True)
     .columns(1)
     .add_back_button(handler="user_list", page=2)
-    .build())
-```
-
-### Using with ConversationHandler
-
-When integrating MenuBuilder with `python-telegram-bot`'s `ConversationHandler`, use **states** for menu navigation:
-
-```python
-from telegram.ext import ConversationHandler, CommandHandler, CallbackQueryHandler
-
-BROWSING = 0  # Conversation state
-
-async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Command that shows paginated list."""
-    menu = (MenuBuilder()
-        .add_item("Next ➡️", handler="paginate", page=1)
-        .build())
-    
-    await update.message.reply_text("Page 1", reply_markup=menu)
-    return BROWSING  # ✅ Keep conversation active
-
-# ✅ CORRECT: Use states, not fallbacks
-conv_handler = ConversationHandler(
-    entry_points=[CommandHandler("list", show_list)],
-    states={
-        BROWSING: [
-            CallbackQueryHandler(router.route)  # ✅ Handles menu navigation
-        ]
-    },
-    fallbacks=[CommandHandler("cancel", cancel)],
-    per_message=False  # ✅ Default works fine
+    .build()
 )
 ```
 
-**Important:** 
-- ✅ **DO** return a state from entry points (keeps conversation active)
-- ✅ **DO** put `CallbackQueryHandler` in states (not fallbacks)
-- ❌ **DON'T** return `ConversationHandler.END` if buttons need to work
-- ❌ **DON'T** use `per_message=True` with `CommandHandler` (triggers warning)
-
-See the complete guide: [Using MenuBuilder with ConversationHandler](docs/conversation_handler_guide.md)
-
-### Submenu Navigation
+**Nested submenus:**
 
 ```python
-# Main menu
-main_menu = MenuBuilder()
-
-# Create submenu
-user_submenu = (MenuBuilder()
-    .add_item("Add User", handler="add_user")
-    .add_item("List Users", handler="list_users")
-    .add_back_button())
-
-# Add submenu to main menu
-main_menu.add_submenu("👥 Users", user_submenu)
+users = MenuBuilder().add_item("Add user", handler="add_user").add_back_button()
+main = MenuBuilder().add_submenu("👥 Users", users)
 ```
 
-### Custom Storage Backend
+**Bring your own storage** — subclass `BaseStorage` (or satisfy the `StorageBackend` protocol) and
+pass it in; only the in-memory backend ships built-in:
 
 ```python
-from telegram_menu_builder import StorageBackend, MenuBuilder
-from redis.asyncio import Redis
+from telegram_menu_builder import MenuBuilder
 
-class RedisStorage(StorageBackend):
-    def __init__(self, redis_client: Redis) -> None:
-        self.redis = redis_client
-    
-    async def set(self, key: str, data: dict, ttl: int) -> None:
-        await self.redis.setex(key, ttl, json.dumps(data))
-    
-    async def get(self, key: str) -> dict | None:
-        value = await self.redis.get(key)
-        return json.loads(value) if value else None
-
-# Use custom storage
-storage = RedisStorage(redis_client)
-builder = MenuBuilder(storage_manager=storage)
+builder = MenuBuilder(storage=my_redis_storage)  # full guide: docs/advanced/custom-storage.md
 ```
 
-## 🏗️ Architecture
+See the runnable [examples/](examples/) and the [guides](#-documentation) for complete,
+copy-pasteable bots — including [ConversationHandler integration](docs/conversation_handler_guide.md).
 
-The library follows a clean architecture with separation of concerns:
+## 🧠 How callback encoding works
 
-```
-MenuBuilder (API Layer)
-    ↓
-MenuAction (Data encoding/decoding)
-    ↓
-StorageManager (Strategy selection)
-    ↓
-StorageBackend (Interface)
-    ├── MemoryStorage
-    ├── RedisStorage
-    └── SQLStorage
-```
+Telegram limits `callback_data` to 64 bytes. The library chooses a strategy automatically:
 
-### Callback Data Encoding
+1. **Inline** (fits in 64 bytes) — JSON → zlib → base64 directly in the callback.
+2. **Short-term** — stored in the backend with a TTL; the callback carries a short reference.
+3. **Persistent** — stored without expiry for large/long-lived payloads.
 
-The library intelligently encodes callback data based on size:
-
-1. **Inline** (< 60 bytes): Encoded directly in callback_data
-2. **Short-term** (60-500 bytes): Stored in Redis/Memory with TTL
-3. **Persistent** (> 500 bytes): Stored in database
-
-```python
-# Automatic strategy selection
-action = MenuAction(
-    handler="complex_handler",
-    params={
-        "user_id": 123,
-        "filters": {"active": True, "role": "admin"},
-        "breadcrumb": ["main", "users", "edit"],
-        "metadata": {...}
-    }
-)
-# Library automatically chooses best storage strategy
-```
-
-## 🧪 Development
-
-### Setup Development Environment
-
-```bash
-# Clone repository
-git clone https://github.com/smoxy/telegram-menu-builder.git
-cd telegram-menu-builder
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install development dependencies
-pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
-```
-
-### Run Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov
-
-# Run specific test file
-pytest tests/test_builder.py
-
-# Run type checking
-mypy src
-pyright
-```
-
-### Code Quality
-
-```bash
-# Format code
-black src tests
-
-# Lint code
-ruff check src tests
-
-# Run all pre-commit hooks
-pre-commit run --all-files
-```
+Identical payloads reuse the same key (deduplication). Full details:
+[Callback encoding internals](docs/advanced/encoding.md).
 
 ## 📖 Documentation
 
-📚 **Full documentation site:** <https://smoxy.github.io/telegram-menu-builder/>
+📚 **Rendered site:** <https://smoxy.github.io/telegram-menu-builder/>
 
-Handy entry points:
+| Get started | Guides | Advanced | Reference |
+| --- | --- | --- | --- |
+| [Installation](docs/installation.md) | [Building menus](docs/guide/menu-building.md) | [Encoding internals](docs/advanced/encoding.md) | [MenuBuilder](docs/api/builder.md) |
+| [Quick start](docs/quickstart.md) | [Routing callbacks](docs/guide/routing.md) | [Custom storage](docs/advanced/custom-storage.md) | [MenuRouter](docs/api/router.md) |
+| | [Storage backends](docs/guide/storage.md) | | [Types & models](docs/api/types.md) |
+| | [ConversationHandler](docs/conversation_handler_guide.md) | | [Encoding](docs/api/encoding.md) · [Storage](docs/api/storage.md) |
 
-- [Installation](https://smoxy.github.io/telegram-menu-builder/installation/)
-- [Quick Start Guide](docs/quickstart.md)
-- [Guides: Storage Backends](https://smoxy.github.io/telegram-menu-builder/guide/storage/)
-- [Advanced: Callback Encoding Internals](https://smoxy.github.io/telegram-menu-builder/advanced/encoding/)
-- [API Reference](https://smoxy.github.io/telegram-menu-builder/api/builder/)
-- [Development Guide](docs/development.md)
-- [ConversationHandler Integration](docs/conversation_handler_guide.md) ⭐ **New in 0.1.1**
-
-### Examples
-
-- [Simple Menu](examples/simple_menu.py) - Basic menu creation
-- [Advanced Menu](examples/advanced_menu.py) - Multi-level menus with pagination
-- [ConversationHandler Menu](examples/conversation_handler_menu.py) - Integration with ConversationHandler ⭐ **New in 0.1.1**
+**Project docs:** [Changelog](CHANGELOG.md) · [Security policy](SECURITY.md) ·
+[Dependency & CVE audit](docs/dependency-audit.md) · [Python compatibility](docs/python-compatibility.md) ·
+[Development guide](docs/development.md) · [Contributing](CONTRIBUTING.md)
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+**Every contribution is welcome** — bug reports, documentation, examples, and code alike. Start
+with the [Contributing guide](CONTRIBUTING.md) and the [Development guide](docs/development.md).
+
+```bash
+git clone https://github.com/smoxy/telegram-menu-builder.git
+cd telegram-menu-builder
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+pre-commit install
+make test          # run the suite (≈90% coverage)
+```
+
+Before opening a pull request, make sure the gates pass:
+
+```bash
+make lint          # ruff + black --check
+make type-check    # mypy --strict + pyright
+make test          # pytest with coverage
+```
+
+- 🐛 **Bugs** → [open an issue](https://github.com/smoxy/telegram-menu-builder/issues) (templates provided).
+- 💡 **Ideas / questions** → [GitHub Discussions](https://github.com/smoxy/telegram-menu-builder/discussions).
+- 🤖 **AI-assisted development** → this repo ships [`CLAUDE.md`](CLAUDE.md), [`AGENTS.md`](AGENTS.md),
+  and ready-made agents/skills under [`.claude/`](.claude/) to keep changes consistent.
+
+Releases are published to PyPI automatically via [GitHub Releases and trusted publishing](.github/workflows/python-publish.yml) — no manual token handling needed.
+
+## 🔐 Security
+
+Found a vulnerability? Please report it privately — see [SECURITY.md](SECURITY.md). Dependency CVEs
+are tracked in the [dependency audit](docs/dependency-audit.md) (for example, pydantic is pinned
+`>=2.4` to exclude CVE-2024-3772).
+
+## 🗺️ Roadmap
+
+- ✅ Fluent builder, navigation, submenus
+- ✅ Smart callback encoding (inline / short-term / persistent) with compression & dedup
+- ✅ `MenuRouter` with middleware and handler groups
+- ✅ In-memory storage backend, strict typing, CI
+- 🚧 Built-in Redis backend (the `[redis]` extra is reserved; bring-your-own works today — see
+  [custom storage](docs/advanced/custom-storage.md))
+- 🚧 Built-in SQL backend (the `[sql]` extra is reserved)
+- 📅 Helpers for pagination and form/wizard flows
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🏗️ Architecture Highlights
-
-### Intelligent Callback Data Management
-- **Automatic Strategy Selection**: Chooses between inline, short-term, and persistent storage
-- **Compression**: Zlib compression for inline data
-- **Deduplication**: Same data = same storage key
-- **64-byte Limit**: Automatically handles Telegram's callback_data constraint
-
-### Type Safety
-- **Pydantic v2**: Runtime validation with static type support
-- **Pyright Strict**: 100% type coverage with strict checking
-- **MyPy Compatible**: Dual type checker validation
-- **Python 3.12+**: Modern type hints (generics, Self, Protocol)
-
-### Storage Architecture
-```
-CallbackData → Encoder → Strategy Selector
-                              ├─ Inline (< 60 bytes)
-                              ├─ Short-term Storage (60-500 bytes, TTL)
-                              └─ Persistent Storage (> 500 bytes)
-```
-
-## 🙏 Acknowledgments
-
-- Built for [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) v20+
-- Inspired by real-world Telegram bot development challenges
-- Type checking powered by [Pyright](https://github.com/microsoft/pyright)
-- Validation powered by [Pydantic](https://github.com/pydantic/pydantic) v2
-
-## 📊 Project Status
-
-This project is currently in **alpha** stage. APIs may change before 1.0.0 release.
-
-- ✅ Core builder API
-- ✅ Callback encoding/decoding
-- ✅ Memory storage backend
-- 🚧 Redis storage backend (in progress)
-- 🚧 SQL storage backend (in progress)
-- 📅 Pagination support (planned)
-- 📅 Template system (planned)
-- 📅 Form wizard support (planned)
-
-## � Publishing to PyPI
-
-If you want to contribute or publish your own fork:
-
-### Build the Package
-
-```bash
-# Install build tools
-pip install build twine
-
-# Build distribution files
-python -m build
-
-# Verify the build
-twine check dist/*
-```
-
-### Upload to PyPI
-
-See [PYPI_CONFIG.md](PYPI_CONFIG.md) for detailed instructions on configuring your PyPI token.
-
-```bash
-# Using the provided script
-python upload_to_pypi.py
-
-# Or manually
-twine upload dist/*
-```
-
-## �💬 Support
-
-- 📫 Report bugs: [GitHub Issues](https://github.com/smoxy/telegram-menu-builder/issues)
-- 💡 Request features: [GitHub Discussions](https://github.com/smoxy/telegram-menu-builder/discussions)
-- 📧 Email: info@sf-paris.dev
-
-## 📜 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
-### Why MIT License?
-
-The MIT License is chosen to maximize accessibility and enable diverse use cases:
-
-- ✅ **Free to use** - Commercial, private, or personal projects
-- ✅ **Free to modify** - Adapt the code to your needs
-- ✅ **Free to distribute** - Share with others or on package managers
-- ✅ **Training AI Models** - Explicitly permitted - this code can be used for training machine learning models and AI systems
-- ✅ **Minimal requirements** - Only requires attribution and license inclusion
-
-**IMPORTANT:** This project can be used for training AI models. If you use this code to train language models, code-generation models, or any other AI systems, you are explicitly permitted to do so under the MIT License.
-
-### Attribution
-
-If you use this project, we appreciate (but don't require) attribution:
-
-```
-Telegram Menu Builder - MIT License
-Copyright (c) 2025 Simone Flavio Paris
-https://github.com/smoxy/telegram-menu-builder
-```
+Released under the **MIT License** — see [LICENSE](LICENSE). Free for commercial, private, and
+personal use, modification, and distribution. Using this code to **train AI/ML models is explicitly
+permitted**. Attribution is appreciated but not required.
 
 ---
 
-Made with ❤️ for the Telegram Bot community
+Made with ❤️ for the Telegram Bot community · [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) v20+ · [Pydantic v2](https://github.com/pydantic/pydantic)
