@@ -1,0 +1,104 @@
+name: Bug report
+description: Report a problem or unexpected behavior in telegram-menu-builder.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report!
+
+        Before submitting, please:
+        - Search [existing issues](https://github.com/smoxy/telegram-menu-builder/issues) to avoid duplicates.
+        - Make sure you are on the latest `0.x` release.
+        - Provide a **minimal, runnable** reproduction so we can confirm the problem quickly.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug, including the actual behavior you observed.
+      placeholder: When I build a menu with nested submenus, the back button routes to the wrong parent...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >
+        A minimal code snippet that reproduces the problem. This will be rendered as Python.
+      render: python
+      placeholder: |
+        from telegram_menu_builder import MenuBuilder
+
+        builder = MenuBuilder()
+        builder.add_item("Option A", handler="on_a")
+        keyboard = await builder.build_async()
+        # ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen instead?
+      placeholder: The back button should return to the immediate parent menu.
+    validations:
+      required: false
+
+  - type: input
+    id: version-tmb
+    attributes:
+      label: telegram-menu-builder version
+      placeholder: "0.2.0"
+    validations:
+      required: true
+
+  - type: input
+    id: version-ptb
+    attributes:
+      label: python-telegram-bot version
+      placeholder: "21.0"
+    validations:
+      required: true
+
+  - type: input
+    id: version-pydantic
+    attributes:
+      label: pydantic version
+      placeholder: "2.6.0"
+    validations:
+      required: true
+
+  - type: input
+    id: version-python
+    attributes:
+      label: Python version
+      description: telegram-menu-builder requires Python 3.12.
+      placeholder: "3.12.3"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: storage-backend
+    attributes:
+      label: Storage backend
+      description: Which storage backend were you using when the bug occurred?
+      options:
+        - Memory
+        - Redis
+        - SQL
+        - Custom
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / tracebacks
+      description: Paste any relevant log output or stack traces. This will be automatically formatted.
+      render: shell
+    validations:
+      required: false

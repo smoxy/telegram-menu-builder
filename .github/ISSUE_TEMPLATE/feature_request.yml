@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a new capability or improvement for telegram-menu-builder.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement!
+
+        Please describe the problem you are trying to solve before describing the
+        solution — it helps us understand the motivation and consider alternatives.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem are you trying to solve? What is missing or painful today?
+      placeholder: I want to attach per-item visibility predicates, but there is currently no way to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-api
+    attributes:
+      label: Proposed API
+      description: >
+        Show how you would like the feature to look as a fluent builder example.
+        This will be rendered as Python.
+      render: python
+      placeholder: |
+        builder = (
+            MenuBuilder()
+            .add_item("Admin", handler="on_admin")
+            .visible_when(lambda ctx: ctx.user.is_admin)
+        )
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches or workarounds have you considered, and why are they insufficient?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to submit a PR to implement this feature.
+          required: false
