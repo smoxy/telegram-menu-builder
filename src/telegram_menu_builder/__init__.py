@@ -28,6 +28,7 @@ Example:
 """
 
 from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING, Any
 
 from telegram_menu_builder.builder import MenuBuilder
 from telegram_menu_builder.router import MenuRouter
@@ -49,6 +50,9 @@ from telegram_menu_builder.types import (
     ValidationError,
 )
 
+if TYPE_CHECKING:
+    from telegram_menu_builder.storage import SQLAlchemyStorage
+
 try:
     __version__ = version("telegram-menu-builder")
 except PackageNotFoundError:  # pragma: no cover - only when running from a non-installed tree
@@ -69,8 +73,20 @@ __all__ = [
     "MenuItem",
     "MenuRouter",
     "NavigationConfig",
+    "SQLAlchemyStorage",
     "StorageBackend",
     "StorageError",
     "StorageStrategy",
     "ValidationError",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "SQLAlchemyStorage":
+        try:
+            from telegram_menu_builder.storage import SQLAlchemyStorage
+        except ImportError as exc:  # pragma: no cover
+            msg = "SQLAlchemyStorage requires the 'sql' extra. Install it with: pip install 'telegram-menu-builder[sql]'"
+            raise ImportError(msg) from exc
+        return SQLAlchemyStorage
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

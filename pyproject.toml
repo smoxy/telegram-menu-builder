@@ -73,12 +73,20 @@ redis = [
 ]
 
 sql = [
-    "sqlalchemy>=2.0",
+    "sqlalchemy[asyncio]>=2.0.30,<3.0",
     "aiosqlite>=0.19",
 ]
 
+postgres = [
+    "asyncpg>=0.29",
+]
+
+mysql = [
+    "asyncmy>=0.2.9",
+]
+
 all = [
-    "telegram-menu-builder[redis,sql]",
+    "telegram-menu-builder[redis,sql,postgres,mysql]",
 ]
 
 [project.urls]
@@ -234,6 +242,9 @@ ignore = [
     "E501",   # line too long (handled by black)
     "PLR0913", # too many arguments
     "PLR2004", # magic value comparison
+    "PLC0415", # import outside top-level: required by the PEP 562 lazy __getattr__
+               # exports that keep `import telegram_menu_builder` working without the
+               # optional `sql` extra installed.
 ]
 
 [tool.ruff.lint.per-file-ignores]
