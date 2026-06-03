@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-03
+
+### Added
+- Built-in async SQL storage backend (`SQLAlchemyStorage`) for PostgreSQL/Supabase, MySQL/MariaDB,
+  and SQLite via SQLAlchemy 2.0 (async); new optional extras `[postgres]` and `[mysql]`; explicit
+  schema management via `create_schema()`/`drop_schema()`.
+
+### Changed
+- The `[sql]` extra now pins `sqlalchemy[asyncio]>=2.0.30,<3.0`.
+
 ## [0.2.0] - 2026-06-03
 
 ### Fixed
@@ -79,7 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example applications
 - Documentation
 
-[Unreleased]: https://github.com/smoxy/telegram-menu-builder/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/smoxy/telegram-menu-builder/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/smoxy/telegram-menu-builder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/smoxy/telegram-menu-builder/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/smoxy/telegram-menu-builder/releases/tag/v0.1.1
 [0.1.0]: https://github.com/smoxy/telegram-menu-builder/releases/tag/v0.1.0
