@@ -7,6 +7,7 @@ import pytest
 from telegram import InlineKeyboardMarkup
 
 from telegram_menu_builder import MenuBuilder
+from telegram_menu_builder.encoding import CallbackEncoder
 from telegram_menu_builder.storage import MemoryStorage
 from telegram_menu_builder.types import ValidationError
 
@@ -156,12 +157,51 @@ class TestMenuBuilder:
         # Parameters are encoded in callback_data
         assert menu.inline_keyboard[0][0].callback_data is not None
 
-    def test_async_build(self, builder):
-        """Test async build method."""
-        builder.add_item("Test", handler="test")
-        menu = builder.build()  # Use sync build for test compatibility
+    async def test_build_async_encodes_callback_data(self, storage):
+        """build_async produces non-empty, decodable callback data.
 
-        assert isinstance(menu, InlineKeyboardMarkup)
+        Regression test for the bug where items added via add_item lost their
+        handler and params (empty callback_data) when built inside a running loop.
+        """
+        builder = MenuBuilder(storage=storage)
+        builder.add_item("Greet", handler="greet", user_id=42)
+
+        menu = await builder.build_async()
+        callback_data = menu.inline_keyboard[0][0].callback_data
+
+        assert callback_data  # non-empty
+        action = await CallbackEncoder(storage).decode(callback_data)
+        assert action.handler == "greet"
+        assert action.params == {"user_id": 42}
+
+    async def test_sync_build_inside_running_loop(self, storage):
+        """Sync .build() called inside a running loop still encodes callback data.
+
+        Exercises the worker-thread fallback path in build().
+        """
+        builder = MenuBuilder(storage=storage)
+        builder.add_item("Greet", handler="greet", user_id=7)
+
+        menu = builder.build()
+        callback_data = menu.inline_keyboard[0][0].callback_data
+
+        assert callback_data
+        action = await CallbackEncoder(storage).decode(callback_data)
+        assert action.handler == "greet"
+        assert action.params == {"user_id": 7}
+
+    async def test_submenu_builds_without_serialization_error(self, storage):
+        """add_submenu encodes successfully (the builder object is not serialized)."""
+        submenu = MenuBuilder(storage=storage).add_item("Sub", handler="sub_handler")
+        builder = MenuBuilder(storage=storage).add_submenu("Open", submenu)
+
+        menu = await builder.build_async()
+        callback_data = menu.inline_keyboard[0][0].callback_data
+
+        assert callback_data
+        action = await CallbackEncoder(storage).decode(callback_data)
+        assert action.params["_submenu_id"] == id(submenu)
+        assert builder.get_submenu(id(submenu)) is submenu
 
     def test_fluent_api_chaining(self, builder):
         """Test that all methods return self for chaining."""

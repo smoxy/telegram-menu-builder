@@ -5,7 +5,9 @@ for creating complex, nested inline keyboard menus with ease.
 """
 
 import asyncio
+import threading
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Any, Self
 
 from telegram import InlineKeyboardMarkup
@@ -20,6 +22,26 @@ from telegram_menu_builder.types import (
     NavigationConfig,
     ValidationError,
 )
+
+
+@dataclass
+class _CallbackItemSpec:
+    """A pending callback menu item awaiting encoding at build time."""
+
+    text: str
+    handler: str
+    params: dict[str, Any] = field(default_factory=dict[str, Any])
+
+
+@dataclass
+class _UrlItemSpec:
+    """A pending URL menu item (no callback data to encode)."""
+
+    text: str
+    url: str
+
+
+_ItemSpec = _CallbackItemSpec | _UrlItemSpec
 
 
 class MenuBuilder:
@@ -60,7 +82,8 @@ class MenuBuilder:
         self._encoder = CallbackEncoder(self._storage)
         self._menu_id = menu_id
 
-        self._items: list[MenuItem] = []
+        self._items: list[_ItemSpec] = []
+        self._submenus: dict[int, MenuBuilder] = {}
         self._layout = LayoutConfig()
         self._navigation = NavigationConfig()
 
@@ -84,7 +107,7 @@ class MenuBuilder:
             ...     breadcrumb=["settings", "users"]
             ... )
         """
-        self._items.append(self._create_menu_item(text, handler, params))
+        self._items.append(_CallbackItemSpec(text=text, handler=handler, params=dict(params)))
         return self
 
     def add_items(self, items: Sequence[tuple[str, str, dict[str, Any]]]) -> Self:
@@ -119,7 +142,7 @@ class MenuBuilder:
         Example:
             >>> builder.add_url_button("Visit Website", "https://example.com")
         """
-        self._items.append(MenuItem(text=text, url=url))
+        self._items.append(_UrlItemSpec(text=text, url=url))
         return self
 
     def add_submenu(
@@ -142,11 +165,27 @@ class MenuBuilder:
             >>> submenu = MenuBuilder().add_item("Sub option", "handle_sub")
             >>> builder.add_submenu("Open submenu", submenu)
         """
-        # Store submenu reference in params
-        params["_submenu_id"] = id(submenu)
-        params["_submenu_builder"] = submenu
+        # Register the submenu in an internal registry keyed by id(). Only the
+        # JSON-serializable integer id is placed in params; the builder object
+        # itself must never leak into encoded callback data (it is not
+        # JSON-serializable and would fail MenuAction validation).
+        submenu_id = id(submenu)
+        self._submenus[submenu_id] = submenu
+        params["_submenu_id"] = submenu_id
 
         return self.add_item(text, handler, **params)
+
+    def get_submenu(self, submenu_id: int) -> "MenuBuilder | None":
+        """Return a submenu builder previously registered via :meth:`add_submenu`.
+
+        Args:
+            submenu_id: The ``id()`` of the submenu builder, as stored in a
+                button's ``_submenu_id`` parameter.
+
+        Returns:
+            The registered MenuBuilder, or None if no submenu matches.
+        """
+        return self._submenus.get(submenu_id)
 
     def columns(self, n: int) -> Self:
         """Set number of columns in the grid layout.
@@ -187,6 +226,32 @@ class MenuBuilder:
         self._layout.max_rows = n
         return self
 
+    def _set_nav_button(self, slot: str, text: str, handler: str, params: dict[str, Any]) -> Self:
+        """Set a navigation button slot on the navigation config.
+
+        Args:
+            slot: One of ``back_button``, ``next_button``, ``exit_button``, ``cancel_button``.
+            text: Button text.
+            handler: Handler function name.
+            params: Additional handler parameters.
+
+        Returns:
+            Self for chaining.
+        """
+        button = NavigationButton(text=text, handler=handler, params=params)
+        match slot:
+            case "back_button":
+                self._navigation.back_button = button
+            case "next_button":
+                self._navigation.next_button = button
+            case "exit_button":
+                self._navigation.exit_button = button
+            case "cancel_button":
+                self._navigation.cancel_button = button
+            case _:  # pragma: no cover - internal callers only pass known slots
+                raise ValueError(f"Unknown navigation slot: {slot}")
+        return self
+
     def add_back_button(
         self, text: str = "🔙 Back", handler: str = "go_back", **params: Any
     ) -> Self:
@@ -203,8 +268,7 @@ class MenuBuilder:
         Example:
             >>> builder.add_back_button(handler="return_to_menu", page=1)
         """
-        self._navigation.back_button = NavigationButton(text=text, handler=handler, params=params)
-        return self
+        return self._set_nav_button("back_button", text, handler, params)
 
     def add_next_button(
         self, text: str = "➡️ Next", handler: str = "go_next", **params: Any
@@ -222,8 +286,7 @@ class MenuBuilder:
         Example:
             >>> builder.add_next_button(handler="next_page", page=2)
         """
-        self._navigation.next_button = NavigationButton(text=text, handler=handler, params=params)
-        return self
+        return self._set_nav_button("next_button", text, handler, params)
 
     def add_exit_button(
         self, text: str = "❌ Exit", handler: str = "exit_menu", **params: Any
@@ -241,8 +304,7 @@ class MenuBuilder:
         Example:
             >>> builder.add_exit_button()
         """
-        self._navigation.exit_button = NavigationButton(text=text, handler=handler, params=params)
-        return self
+        return self._set_nav_button("exit_button", text, handler, params)
 
     def add_cancel_button(
         self, text: str = "🚫 Cancel", handler: str = "cancel", **params: Any
@@ -260,14 +322,18 @@ class MenuBuilder:
         Example:
             >>> builder.add_cancel_button(handler="cancel_operation")
         """
-        self._navigation.cancel_button = NavigationButton(text=text, handler=handler, params=params)
-        return self
+        return self._set_nav_button("cancel_button", text, handler, params)
 
     def build(self) -> InlineKeyboardMarkup:
         """Build the final InlineKeyboardMarkup.
 
-        This method synchronously constructs the menu by encoding all callback data.
-        Note: This is a synchronous wrapper around the async build_async method.
+        This is a synchronous convenience wrapper around :meth:`build_async` that
+        encodes all callback data and assembles the keyboard.
+
+        When called outside an event loop it drives the async build directly. When
+        called from within a running event loop (e.g. inside an async handler) the
+        async build is executed on a short-lived worker thread so this synchronous
+        API keeps working. In async code, prefer ``await build_async()`` directly.
 
         Returns:
             InlineKeyboardMarkup ready to use with python-telegram-bot
@@ -279,14 +345,30 @@ class MenuBuilder:
             >>> menu = builder.build()
             >>> await update.message.reply_text("Choose:", reply_markup=menu)
         """
-        # Run async build in event loop
         try:
-            loop = asyncio.get_event_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # No running loop: safe to drive the async build directly.
+            return asyncio.run(self.build_async())
 
-        return loop.run_until_complete(self.build_async())
+        # A loop is already running in this thread: run the async build on a
+        # dedicated worker thread (with its own event loop) and wait for it.
+        result: list[InlineKeyboardMarkup] = []
+        error: list[Exception] = []
+
+        def _runner() -> None:
+            try:
+                result.append(asyncio.run(self.build_async()))
+            except Exception as exc:  # re-raised on the calling thread below
+                error.append(exc)
+
+        thread = threading.Thread(target=_runner, daemon=True)
+        thread.start()
+        thread.join()
+
+        if error:
+            raise error[0]
+        return result[0]
 
     async def build_async(self) -> InlineKeyboardMarkup:
         """Build the final InlineKeyboardMarkup (async version).
@@ -300,12 +382,24 @@ class MenuBuilder:
         if not self._items and not self._has_navigation_buttons():
             raise ValidationError("Cannot build empty menu (no items or navigation buttons)")
 
+        # Encode all pending item specs into MenuItems. Encoding is deferred from
+        # the add_* calls to here so that it always runs inside an async context
+        # (this is what guarantees non-empty callback_data, see build()).
+        items: list[MenuItem] = []
+        for spec in self._items:
+            if isinstance(spec, _UrlItemSpec):
+                items.append(MenuItem(text=spec.text, url=spec.url))
+            else:
+                items.append(
+                    await self._create_menu_item_async(spec.text, spec.handler, spec.params)
+                )
+
         # Build keyboard layout
         keyboard: list[list[MenuItem]] = []
 
         # Arrange items in grid
         current_row: list[MenuItem] = []
-        for item in self._items:
+        for item in items:
             current_row.append(item)
 
             # Check if row is complete
@@ -329,24 +423,6 @@ class MenuBuilder:
         telegram_keyboard = [[item.to_telegram_button() for item in row] for row in keyboard]
 
         return InlineKeyboardMarkup(telegram_keyboard)
-
-    def _create_menu_item(self, text: str, handler: str, params: dict[str, Any]) -> MenuItem:
-        """Create a MenuItem with encoded callback data (sync version).
-
-        This is a helper that runs the async encoding synchronously.
-        """
-        try:
-            loop = asyncio.get_running_loop()
-            # Already in an async context, defer encoding to build time
-            return MenuItem(text=text, callback_data="")
-        except RuntimeError:
-            # No running loop, safe to create new one
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            return loop.run_until_complete(self._create_menu_item_async(text, handler, params))
 
     async def _create_menu_item_async(
         self, text: str, handler: str, params: dict[str, Any]
@@ -421,4 +497,3 @@ class MenuBuilder:
     def encoder(self) -> CallbackEncoder:
         """Get the callback encoder."""
         return self._encoder
-

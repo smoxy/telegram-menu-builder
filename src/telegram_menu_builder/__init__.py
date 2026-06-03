@@ -27,6 +27,8 @@ Example:
     ```
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from telegram_menu_builder.builder import MenuBuilder
 from telegram_menu_builder.router import MenuRouter
 from telegram_menu_builder.storage import (
@@ -35,27 +37,40 @@ from telegram_menu_builder.storage import (
 )
 from telegram_menu_builder.types import (
     CallbackData,
+    DecodingError,
+    EncodingError,
     LayoutConfig,
     MenuAction,
+    MenuBuilderError,
     MenuItem,
     NavigationConfig,
+    StorageError,
     StorageStrategy,
+    ValidationError,
 )
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("telegram-menu-builder")
+except PackageNotFoundError:  # pragma: no cover - only when running from a non-installed tree
+    __version__ = "0.0.0+unknown"
+
 __author__ = "Simone Flavio Paris"
 __license__ = "MIT"
 
 __all__ = [
     "CallbackData",
+    "DecodingError",
+    "EncodingError",
     "LayoutConfig",
     "MemoryStorage",
     "MenuAction",
     "MenuBuilder",
+    "MenuBuilderError",
     "MenuItem",
     "MenuRouter",
     "NavigationConfig",
     "StorageBackend",
+    "StorageError",
     "StorageStrategy",
+    "ValidationError",
 ]
-

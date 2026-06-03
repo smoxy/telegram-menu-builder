@@ -8,12 +8,12 @@ import logging
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
-from telegram import Update
+from telegram import CallbackQuery, Update
 from telegram.ext import ContextTypes
 
 from telegram_menu_builder.encoding import CallbackEncoder
 from telegram_menu_builder.storage import MemoryStorage, StorageBackend
-from telegram_menu_builder.types import DecodingError
+from telegram_menu_builder.types import DecodingError, MenuAction
 
 logger = logging.getLogger(__name__)
 
@@ -148,9 +148,7 @@ class MenuRouter:
         """
         self._default_handler = func
 
-    async def route(  # noqa: PLR0912
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
+    async def route(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Route a callback query to the appropriate handler.
 
         This is the main entry point that should be registered with
@@ -177,58 +175,91 @@ class MenuRouter:
             return
 
         try:
-            # Decode callback data
             action = await self._encoder.decode(callback_data)
-            params = action.params
-            handler_name = action.handler
-
-            logger.debug(f"Routing to handler '{handler_name}' with params: {params}")
-
-            # Run before middleware
-            for before_handler in self._before_handlers:
-                await before_handler(update, context, params)
-
-            # Find and execute handler
-            handler = self._handlers.get(handler_name)
-
-            if handler:
-                await handler(update, context, params)
-            elif self._default_handler:
-                logger.debug(f"Handler '{handler_name}' not found, using default handler")
-                await self._default_handler(update, context, params)
-            else:
-                logger.warning(f"No handler registered for '{handler_name}' and no default handler")
-                if self._auto_answer:
-                    await callback_query.answer("Action not available")
-                return
-
-            # Run after middleware
-            for after_handler in self._after_handlers:
-                await after_handler(update, context, params)
-
-            # Auto-answer callback query
-            if self._auto_answer:
+            handled = await self._dispatch(update, context, callback_query, action)
+            if handled and self._auto_answer:
                 await callback_query.answer()
-
         except DecodingError as e:
             logger.error(f"Failed to decode callback data: {e}")
-
-            # Run error handlers
-            for error_handler in self._error_handlers:
-                await error_handler(update, context, e)
-
-            if self._auto_answer:
-                await callback_query.answer("Invalid or expired action")
-
+            await self._handle_routing_error(
+                update, context, callback_query, e, "Invalid or expired action"
+            )
         except Exception as e:
             logger.exception(f"Error handling callback query: {e}")
+            await self._handle_routing_error(
+                update, context, callback_query, e, "An error occurred"
+            )
 
-            # Run error handlers
-            for error_handler in self._error_handlers:
-                await error_handler(update, context, e)
+    async def _dispatch(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        callback_query: CallbackQuery,
+        action: MenuAction,
+    ) -> bool:
+        """Run middleware and execute the handler for a decoded action.
 
+        Args:
+            update: Telegram Update object.
+            context: Telegram Context object.
+            callback_query: The update's callback query (already validated).
+            action: The decoded MenuAction.
+
+        Returns:
+            True if a handler (or the default handler) ran, False if no handler
+            was found and no default handler is configured.
+        """
+        params = action.params
+        handler_name = action.handler
+
+        logger.debug(f"Routing to handler '{handler_name}' with params: {params}")
+
+        # Run before middleware
+        for before_handler in self._before_handlers:
+            await before_handler(update, context, params)
+
+        # Find and execute handler
+        handler = self._handlers.get(handler_name)
+
+        if handler:
+            await handler(update, context, params)
+        elif self._default_handler:
+            logger.debug(f"Handler '{handler_name}' not found, using default handler")
+            await self._default_handler(update, context, params)
+        else:
+            logger.warning(f"No handler registered for '{handler_name}' and no default handler")
             if self._auto_answer:
-                await callback_query.answer("An error occurred")
+                await callback_query.answer("Action not available")
+            return False
+
+        # Run after middleware
+        for after_handler in self._after_handlers:
+            await after_handler(update, context, params)
+
+        return True
+
+    async def _handle_routing_error(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        callback_query: CallbackQuery,
+        error: Exception,
+        answer_text: str,
+    ) -> None:
+        """Run registered error handlers and optionally answer the callback query.
+
+        Args:
+            update: Telegram Update object.
+            context: Telegram Context object.
+            callback_query: The update's callback query (already validated).
+            error: The exception that occurred during routing.
+            answer_text: Text to show the user when auto-answering.
+        """
+        for error_handler in self._error_handlers:
+            await error_handler(update, context, error)
+
+        if self._auto_answer:
+            await callback_query.answer(answer_text)
 
     def before(self, func: HandlerFunc) -> HandlerFunc:
         """Register a before middleware handler.

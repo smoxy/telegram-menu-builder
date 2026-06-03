@@ -67,8 +67,7 @@
   "reportOverlappingOverload": "error",
   
   "reportMatchNotExhaustive": "warning",
-  "reportShadowedImports": "error",
-  
+
   "useLibraryCodeForTypes": true,
   "strictListInference": true,
   "strictDictionaryInference": true,
@@ -76,8 +75,7 @@
   "strictParameterNoneValue": true,
   
   "enableTypeIgnoreComments": true,
-  "enableExperiments": false,
-  
+
   "venvPath": ".",
   "venv": ".venv",
   

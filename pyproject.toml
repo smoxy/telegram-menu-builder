@@ -32,8 +32,10 @@ classifiers = [
 ]
 
 dependencies = [
+    # Floor pinned to >=2.4 to exclude CVE-2024-3772 (ReDoS in email validation,
+    # fixed in 2.4.0). See docs/dependency-audit.md.
     "python-telegram-bot>=20.0,<22.6",
-    "pydantic>=2.0,<3.0",
+    "pydantic>=2.4,<3.0",
 ]
 
 [project.optional-dependencies]
@@ -43,17 +45,27 @@ dev = [
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.1",
     "pytest-mock>=3.12",
-    
+
     # Type checking
     "mypy>=1.8",
     "pyright>=1.1.350",
-    
+
     # Code quality
     "ruff>=0.2.0",
     "black>=24.0",
-    
+
+    # Security
+    "pip-audit>=2.7",
+
     # Git hooks
     "pre-commit>=3.6",
+]
+
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.26",
+    "mkdocs-include-markdown-plugin>=6.0",
 ]
 
 redis = [
@@ -257,3 +269,9 @@ extend-exclude = '''
   | dist
 )/
 '''
+
+# ==================== BANDIT ====================
+[tool.bandit]
+exclude_dirs = ["tests", "examples"]
+# B324 (md5): the MD5 use in encoding.py is a non-cryptographic dedup key and is
+# called with usedforsecurity=False. See docs/security.md and docs/dependency-audit.md.

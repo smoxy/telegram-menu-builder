@@ -237,9 +237,11 @@ class CallbackEncoder:
         Returns:
             12-character hex hash
         """
-        # Serialize with sorted keys for determinism
+        # Serialize with sorted keys for determinism. MD5 is used purely as a
+        # fast, deterministic dedup key (not for security), so usedforsecurity is
+        # disabled to make that intent explicit and satisfy security linters.
         json_str = json.dumps(data, sort_keys=True, separators=(",", ":"))
-        hash_obj = hashlib.md5(json_str.encode("utf-8"))
+        hash_obj = hashlib.md5(json_str.encode("utf-8"), usedforsecurity=False)
         return hash_obj.hexdigest()[:12]
 
     async def cleanup_callback(self, callback_data: str) -> bool:

@@ -6,14 +6,14 @@ implemented with Pydantic v2 for validation and type safety.
 
 import json
 from collections.abc import Awaitable, Callable
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from telegram import InlineKeyboardButton
 
 
-class StorageStrategy(str, Enum):
+class StorageStrategy(StrEnum):
     """Strategy for storing callback data based on size and persistence requirements.
 
     Attributes:
