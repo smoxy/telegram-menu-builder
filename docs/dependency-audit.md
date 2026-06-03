@@ -48,7 +48,7 @@ pydantic's **email-validation regex**, fixed in **2.4.0**.
 ## Optional storage dependencies
 
 These are **opt-in**: they are installed only when the matching extra is requested
-(`[sql]`, `[postgres]`, `[mysql]`), so they never enter a default install's surface. CI
+(`[redis]`, `[sql]`, `[postgres]`, `[mysql]`), so they never enter a default install's surface. CI
 installs `[dev,sql]` and the docs build installs `[docs,sql]`, so `SQLAlchemy` + `aiosqlite`
 are in the audited and CI-tested set; the database drivers (`asyncpg`, `asyncmy`) are
 exercised only in opt-in integration runs.
@@ -70,6 +70,15 @@ pure-Python `aiomysql` is a supported drop-in alternative (`mysql+aiomysql://`) 
 **MariaDB 12.3.2** (aiomysql) via the parametrized integration suite in
 `tests/test_sql_storage.py`.
 
+### `redis` (`[redis]`: `redis>=5.0`)
+
+No known CVEs affect the imported surface (`redis.asyncio` GET/SET/DELETE/EXISTS/SCAN). The single
+`redis-py` client also serves **Valkey** (RESP-compatible); a duck-typed `valkey-py` client may be
+supplied instead, so there is no `valkey` dependency. `RedisStorage` is verified end-to-end against
+**Redis 7.4.9** and **Valkey 8.1.8** via the parametrized integration suite in
+`tests/test_redis_storage.py` (gated by `TMB_TEST_REDIS_URL` / `TMB_TEST_VALKEY_URL`; `fakeredis`
+covers the default run).
+
 ## Internal note: MD5 in `encoding.py`
 
 `CallbackEncoder._generate_key()` calls `hashlib.md5(..., usedforsecurity=False)`
@@ -87,6 +96,7 @@ which documents the rationale inline. See the
 | pydantic              | `>=2.4,<3.0`      | `CVE-2024-3772` (ReDoS, email validation) | :white_check_mark: OK | Floor `>=2.4` excludes vulnerable `2.0`–`2.3`; not exploitable here (no `EmailStr`). |
 | SQLAlchemy *(opt-in)* | `[sql]` `sqlalchemy[asyncio]>=2.0.30,<3.0` | None affecting imported surface | :white_check_mark: OK | Optional; floor is a stability/typing pin. Only installed via `[sql]`. |
 | aiosqlite / asyncpg / asyncmy *(opt-in)* | `[sql]` / `[postgres]` / `[mysql]` | None affecting usage | :white_check_mark: OK | Optional async drivers; `aiomysql` is a pure-Python alternative to `asyncmy`. |
+| redis *(opt-in)* | `[redis]` `redis>=5.0` | None affecting imported surface | :white_check_mark: OK | Optional; one client serves Redis + Valkey. Verified vs Redis 7.4.9 & Valkey 8.1.8. |
 
 ## How to run the audit locally
 

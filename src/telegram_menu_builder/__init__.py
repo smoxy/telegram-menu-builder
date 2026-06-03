@@ -51,7 +51,7 @@ from telegram_menu_builder.types import (
 )
 
 if TYPE_CHECKING:
-    from telegram_menu_builder.storage import SQLAlchemyStorage
+    from telegram_menu_builder.storage import RedisStorage, SQLAlchemyStorage
 
 try:
     __version__ = version("telegram-menu-builder")
@@ -73,6 +73,7 @@ __all__ = [
     "MenuItem",
     "MenuRouter",
     "NavigationConfig",
+    "RedisStorage",
     "SQLAlchemyStorage",
     "StorageBackend",
     "StorageError",
@@ -82,6 +83,13 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
+    if name == "RedisStorage":
+        try:
+            from telegram_menu_builder.storage import RedisStorage
+        except ImportError as exc:  # pragma: no cover
+            msg = "RedisStorage requires the 'redis' extra. Install it with: pip install 'telegram-menu-builder[redis]'"
+            raise ImportError(msg) from exc
+        return RedisStorage
     if name == "SQLAlchemyStorage":
         try:
             from telegram_menu_builder.storage import SQLAlchemyStorage

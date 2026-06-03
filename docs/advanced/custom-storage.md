@@ -96,6 +96,12 @@ class MyStorage(BaseStorage):
 
 ## Redis sketch
 
+!!! tip "A built-in Redis (and Valkey) backend already ships"
+    You don't need to hand-roll Redis: `telegram_menu_builder.storage.RedisStorage`
+    (built on redis-py) serves both **Redis** and **Valkey** from one class — see the
+    [Redis & Valkey storage guide](../guide/redis-storage.md). The sketch below stays
+    useful as a minimal, from-scratch illustration of the `BaseStorage` contract.
+
 Redis is a natural fit: it has native TTL support, so the `ttl` argument maps
 straight onto `SETEX`/`expire`. Store values as JSON strings.
 

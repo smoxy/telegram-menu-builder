@@ -31,13 +31,19 @@ Install optional features with the standard `pip` extras syntax, for example
 
 | Extra        | Installs                                                                                                       | Use for                                                       |
 | ------------ | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `[redis]`    | `redis>=5.0`                                                                                                    | Redis-backed short-term/persistent callback storage.          |
+| `[redis]`    | `redis>=5.0`                                                                                                    | Powers the built-in `RedisStorage` backend — works with both **Redis** and **Valkey**. |
 | `[sql]`      | `sqlalchemy[asyncio]>=2.0.30,<3.0`, `aiosqlite>=0.19`                                                           | Built-in async SQL storage (`SQLAlchemyStorage`); SQLite ready out of the box. |
 | `[postgres]` | `asyncpg>=0.29`                                                                                                 | PostgreSQL/Supabase driver for the SQL backend (add on top of `[sql]`).        |
 | `[mysql]`    | `asyncmy>=0.2.9`                                                                                                | MySQL/MariaDB driver for the SQL backend (add on top of `[sql]`).              |
 | `[dev]`      | Test, lint, type-check, and build tooling                                                                       | Local development and contributing.                           |
 | `[docs]`     | `mkdocs>=1.6`, `mkdocs-material>=9.5`, `mkdocstrings[python]>=0.26`, `mkdocs-include-markdown-plugin>=6.0`       | Building this documentation site.                             |
 | `[all]`      | Everything from `[redis]`, `[sql]`, `[postgres]`, and `[mysql]`                                                 | All optional runtime backends in one install.                 |
+
+!!! note "Redis or Valkey — one client, both servers"
+    The single `[redis]` client (`redis-py`) also connects to **Valkey**, the BSD-licensed,
+    RESP-compatible Redis fork we recommend. Because Valkey speaks the Redis protocol, just point a
+    normal `redis://` (or `rediss://` for TLS) URL at your Valkey server — there is no separate
+    client or extra. See [Redis/Valkey storage](guide/redis-storage.md).
 
 !!! note "Choosing a SQL driver"
     `[sql]` installs SQLAlchemy together with `aiosqlite`, so SQLite works immediately. Add

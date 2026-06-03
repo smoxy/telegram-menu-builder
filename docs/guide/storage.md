@@ -141,13 +141,41 @@ await storage.create_schema()  # once at startup; idempotent
 See the [SQL storage guide](sql-storage.md) for database URLs, schema setup,
 engine ownership, TTL cleanup, and monitoring.
 
-### Redis (planned / bring-your-own)
+### Redis & Valkey (available)
 
-A Redis backend is a **planned optional extra** (`pip install
-"telegram-menu-builder[redis]"`) and is not bundled yet. Until it ships — or
-whenever you need a backend the library doesn't provide — you can plug in your
-own. See [Custom storage backends](../advanced/custom-storage.md) for the full
-contract plus a Redis sketch.
+A production-ready async backend ships as
+[`RedisStorage`][telegram_menu_builder.storage.redis.RedisStorage]. Install the
+`[redis]` extra (which bundles `redis>=5.0`):
+
+```bash
+pip install "telegram-menu-builder[redis]"
+```
+
+One class serves **both Redis and Valkey** — Valkey is the BSD-licensed,
+RESP-compatible Redis fork that this project **recommends** to the community.
+Because Valkey speaks the Redis wire protocol, you point a normal `redis://` (or
+`rediss://` for TLS) URL at your Valkey server; there is no separate client or
+extra. Unlike the SQL backend, there is **no schema to create and no manual
+cleanup** — Redis/Valkey enforce TTL natively, so short callbacks expire on
+their own. It is concurrency-safe and survives process restarts.
+
+```python
+from telegram_menu_builder import MenuBuilder, MenuRouter
+from telegram_menu_builder.storage import RedisStorage
+
+# Same URL works for Redis or a Valkey server.
+storage = RedisStorage(url="redis://localhost:6379/0")
+builder = MenuBuilder(storage=storage)
+router = MenuRouter(storage=storage)
+```
+
+!!! warning "Builder and router must share one backend"
+    As with every backend, pass the **same** `RedisStorage` instance to both
+    `MenuBuilder` and `MenuRouter`, or large callbacks will encode fine but
+    decode to `DecodingError: Callback data expired or not found`.
+
+See the [Redis & Valkey storage guide](redis-storage.md) for connection URLs,
+client ownership, namespacing, and TTL behavior.
 
 ## See also
 

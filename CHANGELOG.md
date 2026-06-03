@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-04
+
 ### Added
+- Built-in async Redis storage backend (`RedisStorage`) on `redis-py`, with first-class **Valkey**
+  support (RESP-compatible — point a `redis://` URL at a Valkey server); native server-side TTL,
+  namespaced keys, and owns-vs-borrows client lifecycle. Valkey is the recommended option, and the
+  backend is verified end-to-end against live **Redis 7.4.9** and **Valkey 8.1.8** (parametrized
+  suite gated by `TMB_TEST_REDIS_URL` / `TMB_TEST_VALKEY_URL`, falling back to `fakeredis`).
 - Built-in async SQL storage backend (`SQLAlchemyStorage`) for PostgreSQL/Supabase, MySQL/MariaDB,
   and SQLite via SQLAlchemy 2.0 (async); new optional extras `[postgres]` and `[mysql]`; explicit
   schema management via `create_schema()`/`drop_schema()`.

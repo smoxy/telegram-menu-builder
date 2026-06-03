@@ -79,6 +79,7 @@ nav:
       - ConversationHandler Integration: conversation_handler_guide.md
       - Storage Backends: guide/storage.md
       - SQL Storage: guide/sql-storage.md
+      - Redis & Valkey Storage: guide/redis-storage.md
   - Advanced:
       - Callback Encoding Internals: advanced/encoding.md
       - Custom Storage Backends: advanced/custom-storage.md

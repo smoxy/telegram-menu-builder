@@ -26,8 +26,8 @@ incoming callbacks and dispatches them to your handlers.
 - 🧭 **Routing & middleware** — `MenuRouter` dispatches callbacks to named handlers with
   `before` / `after` / `on_error` hooks and handler groups.
 - 🔄 **Unlimited nesting** — submenus and navigation (back / next / exit / cancel) buttons.
-- 🧩 **Pluggable storage** — in-memory and built-in async SQL backends are included; implement the
-  `StorageBackend` protocol (or subclass `BaseStorage`) for Redis and other custom backends.
+- 🧩 **Pluggable storage** — built-in in-memory, async SQL, and Redis/Valkey backends are included;
+  or implement the `StorageBackend` protocol (or subclass `BaseStorage`) for your own.
 - 🔐 **Strict typing** — full type hints, validated with both `mypy --strict` and `pyright`
   (Pydantic v2 models), shipped with `py.typed`.
 - 🧪 **Well tested** — ~90% coverage, CI on every push and pull request.
@@ -38,8 +38,8 @@ incoming callbacks and dispatches them to your handlers.
 pip install telegram-menu-builder
 ```
 
-Optional extras: `telegram-menu-builder[redis]`, `[sql]` (plus `[postgres]` / `[mysql]` drivers),
-`[dev]`, `[docs]`. See [Installation](docs/installation.md).
+Optional extras: `telegram-menu-builder[redis]` (built-in Redis/Valkey backend), `[sql]` (plus
+`[postgres]` / `[mysql]` drivers), `[dev]`, `[docs]`. See [Installation](docs/installation.md).
 
 ```python
 from telegram import Update
@@ -99,13 +99,15 @@ users = MenuBuilder().add_item("Add user", handler="add_user").add_back_button()
 main = MenuBuilder().add_submenu("👥 Users", users)
 ```
 
-**Bring your own storage** — in-memory and SQL backends ship built-in; for anything else (e.g.
-Redis) subclass `BaseStorage` (or satisfy the `StorageBackend` protocol) and pass it in:
+**Storage backends** — in-memory, SQL, and Redis/Valkey backends ship built-in; for anything else,
+subclass `BaseStorage` (or satisfy the `StorageBackend` protocol) and pass it in:
 
 ```python
 from telegram_menu_builder import MenuBuilder
+from telegram_menu_builder.storage import RedisStorage  # one client, also speaks Valkey
 
-builder = MenuBuilder(storage=my_redis_storage)  # full guide: docs/advanced/custom-storage.md
+builder = MenuBuilder(storage=RedisStorage(url="redis://localhost:6379/0"))
+# custom backends: docs/advanced/custom-storage.md
 ```
 
 See the runnable [examples/](examples/) and the [guides](#-documentation) for complete,
@@ -181,8 +183,9 @@ are tracked in the [dependency audit](docs/dependency-audit.md) (for example, py
 - ✅ Built-in SQL backend via SQLAlchemy (async) for PostgreSQL/Supabase, MySQL/MariaDB, and SQLite
   (install `[sql]`, plus `[postgres]` or `[mysql]` for those drivers — see
   [storage backends](docs/guide/storage.md))
-- 🚧 Built-in Redis backend (the `[redis]` extra is reserved; bring-your-own works today — see
-  [custom storage](docs/advanced/custom-storage.md))
+- ✅ Built-in Redis backend via `redis-py` that also speaks **Valkey** (the RESP-compatible Redis
+  fork we recommend), verified against Redis 7.4.9 & Valkey 8.1.8 — install `[redis]` (see
+  [Redis/Valkey storage](docs/guide/redis-storage.md))
 - 📅 Helpers for pagination and form/wizard flows
 
 ## 📝 License
