@@ -26,8 +26,8 @@ incoming callbacks and dispatches them to your handlers.
 - 🧭 **Routing & middleware** — `MenuRouter` dispatches callbacks to named handlers with
   `before` / `after` / `on_error` hooks and handler groups.
 - 🔄 **Unlimited nesting** — submenus and navigation (back / next / exit / cancel) buttons.
-- 🧩 **Pluggable storage** — an in-memory backend is included; implement the `StorageBackend`
-  protocol (or subclass `BaseStorage`) for Redis, SQL, etc.
+- 🧩 **Pluggable storage** — in-memory and built-in async SQL backends are included; implement the
+  `StorageBackend` protocol (or subclass `BaseStorage`) for Redis and other custom backends.
 - 🔐 **Strict typing** — full type hints, validated with both `mypy --strict` and `pyright`
   (Pydantic v2 models), shipped with `py.typed`.
 - 🧪 **Well tested** — ~90% coverage, CI on every push and pull request.
@@ -178,9 +178,11 @@ are tracked in the [dependency audit](docs/dependency-audit.md) (for example, py
 - ✅ Smart callback encoding (inline / short-term / persistent) with compression & dedup
 - ✅ `MenuRouter` with middleware and handler groups
 - ✅ In-memory storage backend, strict typing, CI
+- ✅ Built-in SQL backend via SQLAlchemy (async) for PostgreSQL/Supabase, MySQL/MariaDB, and SQLite
+  (install `[sql]`, plus `[postgres]` or `[mysql]` for those drivers — see
+  [storage backends](docs/guide/storage.md))
 - 🚧 Built-in Redis backend (the `[redis]` extra is reserved; bring-your-own works today — see
   [custom storage](docs/advanced/custom-storage.md))
-- 🚧 Built-in SQL backend (the `[sql]` extra is reserved)
 - 📅 Helpers for pagination and form/wizard flows
 
 ## 📝 License

@@ -13,3 +13,7 @@ Pluggable storage backends for callback data. Implement the `StorageBackend` pro
 ## MemoryStorage
 
 ::: telegram_menu_builder.storage.memory.MemoryStorage
+
+## SQLAlchemyStorage
+
+::: telegram_menu_builder.storage.sqlalchemy.SQLAlchemyStorage

@@ -119,11 +119,34 @@ async with MemoryStorage() as storage:
 
 ## Other backends
 
-Redis and SQL backends are **planned optional extras** (`pip install
-"telegram-menu-builder[redis]"` and `[sql]`) and are not bundled yet. Until they
-ship — or whenever you need persistence beyond a single process — you can plug in
-your own backend. See [Custom storage backends](../advanced/custom-storage.md)
-for the full contract plus Redis and `aiosqlite` sketches.
+### SQL (available)
+
+A production-ready async SQL backend ships as
+[`SQLAlchemyStorage`][telegram_menu_builder.storage.sqlalchemy.SQLAlchemyStorage].
+It persists callbacks in a relational database via SQLAlchemy 2.0 async (Core)
+and works across PostgreSQL/Supabase, MySQL/MariaDB, and SQLite from a single
+implementation. Unlike `MemoryStorage`, it is safe for concurrent async tasks
+and survives process restarts. Install the `[sql]` extra (which bundles
+SQLAlchemy + `aiosqlite`), plus the matching driver for your database
+(`[postgres]` for PostgreSQL/Supabase, `[mysql]` for MySQL/MariaDB):
+
+```python
+from telegram_menu_builder.storage import SQLAlchemyStorage
+
+storage = SQLAlchemyStorage(database_url="sqlite+aiosqlite:///callbacks.db")
+await storage.create_schema()  # once at startup; idempotent
+```
+
+See the [SQL storage guide](sql-storage.md) for database URLs, schema setup,
+engine ownership, TTL cleanup, and monitoring.
+
+### Redis (planned / bring-your-own)
+
+A Redis backend is a **planned optional extra** (`pip install
+"telegram-menu-builder[redis]"`) and is not bundled yet. Until it ships — or
+whenever you need a backend the library doesn't provide — you can plug in your
+own. See [Custom storage backends](../advanced/custom-storage.md) for the full
+contract plus a Redis sketch.
 
 ## See also
 

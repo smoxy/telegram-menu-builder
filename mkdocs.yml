@@ -44,6 +44,8 @@ plugins:
       handlers:
         python:
           paths: [src]
+          inventories:
+            - https://docs.sqlalchemy.org/en/20/objects.inv
           options:
             docstring_style: google
             show_source: true
@@ -76,6 +78,7 @@ nav:
       - Callback Routing: guide/routing.md
       - ConversationHandler Integration: conversation_handler_guide.md
       - Storage Backends: guide/storage.md
+      - SQL Storage: guide/sql-storage.md
   - Advanced:
       - Callback Encoding Internals: advanced/encoding.md
       - Custom Storage Backends: advanced/custom-storage.md
