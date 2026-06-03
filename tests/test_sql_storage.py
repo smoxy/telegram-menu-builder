@@ -2,6 +2,7 @@
 
 import os
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 
@@ -16,16 +17,49 @@ from telegram_menu_builder.storage import SQLAlchemyStorage, StorageBackend
 SQLITE_MEMORY_URL = "sqlite+aiosqlite:///:memory:"
 
 
-class TestSQLAlchemyStorage:
-    """Tests for the SQLAlchemy-backed storage backend (in-memory SQLite)."""
+def _backend_params() -> list[Any]:
+    """Backends to run the full suite against.
 
-    @pytest.fixture
-    async def storage(self):
-        """Provide a fresh schema-initialized storage instance for each test."""
-        store = SQLAlchemyStorage(database_url=SQLITE_MEMORY_URL)
+    SQLite (in-memory) always runs. PostgreSQL and/or MySQL are added — and
+    marked ``integration`` — when their ``TMB_TEST_POSTGRES_URL`` /
+    ``TMB_TEST_MYSQL_URL`` env vars point at a reachable async database, so the
+    whole behavioral suite exercises the real dialects (UPSERT, ``get_stats``
+    aggregation, ``LIKE`` patterns, TTL filtering) and not just SQLite.
+    """
+    params = [pytest.param(SQLITE_MEMORY_URL, id="sqlite")]
+    postgres_url = os.environ.get("TMB_TEST_POSTGRES_URL")
+    if postgres_url:
+        params.append(pytest.param(postgres_url, id="postgres", marks=pytest.mark.integration))
+    mysql_url = os.environ.get("TMB_TEST_MYSQL_URL")
+    if mysql_url:
+        params.append(pytest.param(mysql_url, id="mysql", marks=pytest.mark.integration))
+    return params
+
+
+class TestSQLAlchemyStorage:
+    """Behavioral suite for the SQLAlchemy backend, run against every configured DB.
+
+    The ``storage`` fixture is parametrized across SQLite and (when the
+    ``TMB_TEST_*_URL`` env vars are set) live PostgreSQL/MySQL, so each test
+    below validates the same observable contract on every supported dialect.
+    """
+
+    @pytest.fixture(params=_backend_params())
+    async def storage(self, request):
+        """Provide a fresh, schema-initialized backend for each test/dialect.
+
+        The table is created and emptied on setup and dropped on teardown so
+        tests stay isolated even on a shared, persistent real database.
+        """
+        store = SQLAlchemyStorage(database_url=request.param, table_name="tmb_test_callbacks")
         await store.create_schema()
+        await store.clear()
         yield store
-        await store.close()
+        try:
+            if not store.is_closed:
+                await store.drop_schema()
+        finally:
+            await store.close()
 
     async def test_set_get_round_trip(self, storage):
         """Data set can be retrieved unchanged."""
@@ -204,43 +238,3 @@ class TestSQLAlchemyStorage:
         """SQLAlchemyStorage satisfies the runtime-checkable StorageBackend protocol."""
         store = SQLAlchemyStorage(database_url=SQLITE_MEMORY_URL)
         assert isinstance(store, StorageBackend)
-
-
-@pytest.mark.integration
-class TestSQLAlchemyStorageLiveDatabases:
-    """Live integration tests for Postgres/MySQL upsert branches.
-
-    Skipped by default. Set TMB_TEST_POSTGRES_URL and/or TMB_TEST_MYSQL_URL to a
-    reachable async database URL (e.g. ``postgresql+asyncpg://...`` or
-    ``mysql+aiomysql://...``) to exercise the dialect-specific UPSERT paths.
-    """
-
-    async def _round_trip(self, database_url: str) -> None:
-        """Run schema setup, set/get, upsert overwrite, then drop schema."""
-        store = SQLAlchemyStorage(database_url=database_url, table_name="menu_callbacks_it")
-        try:
-            await store.create_schema()
-            await store.set("k", {"h": "first", "p": {}})
-            assert await store.get("k") == {"h": "first", "p": {}}
-
-            # Upsert: same key must overwrite.
-            await store.set("k", {"h": "second", "p": {"x": 1}})
-            assert await store.get("k") == {"h": "second", "p": {"x": 1}}
-
-            await store.drop_schema()
-        finally:
-            await store.close()
-
-    async def test_postgres_round_trip(self):
-        """Exercise the PostgreSQL on_conflict_do_update branch."""
-        url = os.environ.get("TMB_TEST_POSTGRES_URL")
-        if not url:
-            pytest.skip("TMB_TEST_POSTGRES_URL not set")
-        await self._round_trip(url)
-
-    async def test_mysql_round_trip(self):
-        """Exercise the MySQL on_duplicate_key_update branch."""
-        url = os.environ.get("TMB_TEST_MYSQL_URL")
-        if not url:
-            pytest.skip("TMB_TEST_MYSQL_URL not set")
-        await self._round_trip(url)
