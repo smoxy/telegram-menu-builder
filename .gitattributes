@@ -1,0 +1,13 @@
+# Line ending normalizzati a LF su tutte le piattaforme (Mac/Windows/Docker Linux).
+# Coerente con il formatter Ruff (`line-ending = "lf"` in ruff.toml) ed evita che
+# `core.autocrlf` introduca CRLF e generi diff rumorosi.
+* text=auto eol=lf
+
+# File binari: nessuna conversione.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.xlsx binary
+*.xls  binary
