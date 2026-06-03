@@ -35,6 +35,11 @@ def test_exception_hierarchy_exported():
 
 
 def test_all_names_are_importable():
-    """Everything advertised in __all__ is actually importable from the package."""
+    """Everything advertised in __all__ is importable from the package.
+
+    The CI and publish environments install every optional extra (``[sql]``,
+    ``[redis]``), so the lazy storage-backend exports resolve here exactly like the
+    eager names — a dangling or misspelled entry in ``__all__`` fails this test.
+    """
     for name in tmb.__all__:
-        assert hasattr(tmb, name), f"{name} listed in __all__ but not importable"
+        assert getattr(tmb, name) is not None, f"{name} listed in __all__ but not importable"
