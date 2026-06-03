@@ -505,7 +505,7 @@ This allows `context.user_data` to persist across navigation, which is usually d
 
 - [python-telegram-bot FAQ: per_* settings](https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-Asked-Questions#what-do-the-per_-settings-in-conversationhandler-do)
 - [ConversationHandler Documentation](https://docs.python-telegram-bot.org/en/stable/telegram.ext.conversationhandler.html)
-- [Example: conversation_handler_menu.py](../examples/conversation_handler_menu.py)
+- [Example: conversation_handler_menu.py](https://github.com/smoxy/telegram-menu-builder/blob/main/examples/conversation_handler_menu.py)
 
 ---
 

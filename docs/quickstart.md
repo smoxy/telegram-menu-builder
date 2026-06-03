@@ -144,6 +144,6 @@ pyright
 
 ## Next Steps
 
-- Read the [API Reference](api_reference.md)
-- Check [Advanced Usage](advanced.md)
-- Learn about [Storage Backends](storage.md)
+- Read the [API Reference](api/builder.md)
+- Check [Callback Encoding Internals](advanced/encoding.md)
+- Learn about [Storage Backends](guide/storage.md)

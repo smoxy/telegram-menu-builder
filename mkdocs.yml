@@ -1,0 +1,94 @@
+site_name: "Telegram Menu Builder"
+site_description: "A fluent builder for recursive inline-keyboard menus on top of python-telegram-bot."
+site_author: "Simone Flavio Paris"
+site_url: https://smoxy.github.io/telegram-menu-builder/
+
+repo_url: https://github.com/smoxy/telegram-menu-builder
+repo_name: smoxy/telegram-menu-builder
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2025 Simone Flavio Paris &mdash; Released under the MIT License
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - include-markdown
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            filters: ["!^_"]
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+  - tables
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: installation.md
+      - Quick Start: quickstart.md
+  - Guides:
+      - Menu Building: guide/menu-building.md
+      - Callback Routing: guide/routing.md
+      - ConversationHandler Integration: conversation_handler_guide.md
+      - Storage Backends: guide/storage.md
+  - Advanced:
+      - Callback Encoding Internals: advanced/encoding.md
+      - Custom Storage Backends: advanced/custom-storage.md
+  - API Reference:
+      - MenuBuilder: api/builder.md
+      - MenuRouter: api/router.md
+      - Types & Models: api/types.md
+      - Encoding: api/encoding.md
+      - Storage: api/storage.md
+  - Project:
+      - Security: security.md
+      - Dependency & CVE Audit: dependency-audit.md
+      - Python Compatibility: python-compatibility.md
+      - Development: development.md
+      - Contributing: contributing.md
+      - Changelog: changelog.md

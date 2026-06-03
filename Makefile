@@ -1,6 +1,6 @@
 # Makefile for Telegram Menu Builder development
 
-.PHONY: help install install-dev clean test test-cov lint format type-check pre-commit build docs
+.PHONY: help install install-dev clean test test-cov lint format type-check pre-commit build docs docs-serve audit
 
 help:  ## Show this help message
 	@echo 'Usage: make [target]'
@@ -58,4 +58,10 @@ publish:  ## Publish to PyPI
 	python -m twine upload dist/*
 
 docs:  ## Build documentation
-	cd docs && make html
+	mkdocs build --strict
+
+docs-serve:  ## Serve documentation locally with live reload
+	mkdocs serve
+
+audit:  ## Audit dependencies for known vulnerabilities
+	pip-audit

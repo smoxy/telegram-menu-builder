@@ -253,9 +253,15 @@ pre-commit run --all-files
 
 ## 📖 Documentation
 
-Full documentation is available in the `docs/` directory:
+📚 **Full documentation site:** <https://smoxy.github.io/telegram-menu-builder/>
 
+Handy entry points:
+
+- [Installation](https://smoxy.github.io/telegram-menu-builder/installation/)
 - [Quick Start Guide](docs/quickstart.md)
+- [Guides: Storage Backends](https://smoxy.github.io/telegram-menu-builder/guide/storage/)
+- [Advanced: Callback Encoding Internals](https://smoxy.github.io/telegram-menu-builder/advanced/encoding/)
+- [API Reference](https://smoxy.github.io/telegram-menu-builder/api/builder/)
 - [Development Guide](docs/development.md)
 - [ConversationHandler Integration](docs/conversation_handler_guide.md) ⭐ **New in 0.1.1**
 

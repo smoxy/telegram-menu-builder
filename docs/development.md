@@ -184,6 +184,24 @@ class MyStorage(BaseStorage):
 
 ## Documentation
 
+The documentation site is built with **MkDocs** (Material theme) from the Markdown sources in
+`docs/`, configured by `mkdocs.yml`.
+
+### Building the Documentation
+
+```bash
+# Install the documentation toolchain
+pip install -e ".[docs]"
+
+# Serve locally with live reload at http://127.0.0.1:8000
+mkdocs serve
+
+# Build the static site (strict mode fails on warnings/broken links)
+mkdocs build --strict
+```
+
+The same targets are available via `make docs-serve` and `make docs`.
+
 ### Docstrings
 
 Use Google-style docstrings:

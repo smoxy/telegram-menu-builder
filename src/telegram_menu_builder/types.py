@@ -241,10 +241,9 @@ class CallbackData(BaseModel):
 HandlerFunc = Callable[[Any, Any, dict[str, Any]], Awaitable[None]]
 """Type alias for async handler functions.
 
-Args:
-    update: Telegram Update object
-    context: Telegram Context object
-    params: Decoded parameters from callback data
+A handler is an async callable that receives the Telegram ``Update``, the bot
+``Context``, and the ``dict`` of decoded parameters from the callback data, and
+returns ``None``.
 """
 
 

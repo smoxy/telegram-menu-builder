@@ -54,6 +54,9 @@ dmypy.json
 .pyright/
 pyrightconfig.json.user
 
+# MkDocs documentation build output
+/site/
+
 # Virtual environments
 .env
 .venv
