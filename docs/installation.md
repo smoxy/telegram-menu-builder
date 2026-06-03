@@ -14,7 +14,7 @@ pip install telegram-menu-builder
 
 This installs the core library together with its runtime dependencies:
 
-- `python-telegram-bot>=20.0,<22.6`
+- `python-telegram-bot>=20.0,<22.8`
 - `pydantic>=2.4,<3.0`
 
 !!! note "Why the pydantic floor is `>=2.4`"
@@ -44,6 +44,10 @@ Install optional features with the standard `pip` extras syntax, for example
     `[postgres]` for PostgreSQL/Supabase (`asyncpg`) or `[mysql]` for MySQL/MariaDB (`asyncmy`)
     — for example `pip install "telegram-menu-builder[sql,postgres]"`. See
     [Storage Backends](guide/storage.md) for the full SQL guide.
+
+    `asyncmy` is a compiled driver; if it has no wheel for your platform, install the
+    pure-Python `aiomysql` instead and use the `mysql+aiomysql://` URL scheme — the backend
+    behaves identically (both ride SQLAlchemy's MySQL dialect).
 
 ```bash
 # Examples

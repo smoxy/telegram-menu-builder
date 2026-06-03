@@ -30,7 +30,8 @@ telegram-menu-builder/
 │   └── storage/                   # Storage backends
 │       ├── __init__.py
 │       ├── base.py                # Storage interface
-│       └── memory.py              # In-memory implementation
+│       ├── memory.py              # In-memory implementation
+│       └── sqlalchemy.py          # Async SQL backend (PostgreSQL/MySQL/SQLite)
 ├── tests/                         # Test suite
 ├── examples/                      # Usage examples
 ├── docs/                          # Documentation
@@ -120,6 +121,50 @@ pytest -m integration    # Only integration tests
 pytest -m "not slow"     # Exclude slow tests
 ```
 
+### Integration tests against real databases
+
+The SQL backend's behavioral suite (`tests/test_sql_storage.py`) is **parametrized**: it
+always runs against in-memory SQLite, and additionally against live PostgreSQL and/or
+MySQL/MariaDB when the matching env vars point at a reachable async database. Those live
+parameters are marked `integration` and simply aren't collected when the env vars are
+unset, so the default `pytest` run stays driver-free.
+
+```bash
+export TMB_TEST_POSTGRES_URL="postgresql+asyncpg://user:pass@localhost:5432/db"
+export TMB_TEST_MYSQL_URL="mysql+aiomysql://user:pass@localhost:3306/db"   # or mysql+asyncmy://
+pytest tests/test_sql_storage.py
+```
+
+#### Throwaway databases with Docker
+
+You can run both the database and the test client as containers on a private network — no
+host install or published port required:
+
+```bash
+docker network create tmb-net
+
+# --- PostgreSQL ---
+docker run -d --name tmb-pg --network tmb-net \
+  -e POSTGRES_PASSWORD=p -e POSTGRES_DB=t postgres:16-alpine
+docker run --rm --network tmb-net -v "$PWD:/app" -w /app \
+  -e TMB_TEST_POSTGRES_URL="postgresql+asyncpg://postgres:p@tmb-pg:5432/t" python:3.12-slim \
+  sh -lc "pip install -e '.[sql,postgres]' pytest pytest-asyncio pytest-cov pytest-mock && pytest tests/test_sql_storage.py"
+
+# --- MariaDB / MySQL (aiomysql is pure-Python; use asyncmy where a wheel exists) ---
+docker run -d --name tmb-maria --network tmb-net \
+  -e MARIADB_ROOT_PASSWORD=r -e MARIADB_DATABASE=t -e MARIADB_USER=u -e MARIADB_PASSWORD=p mariadb:latest
+until docker exec tmb-maria mariadb-admin ping -pr --silent; do sleep 2; done   # wait for first-boot init
+docker run --rm --network tmb-net -v "$PWD:/app" -w /app \
+  -e TMB_TEST_MYSQL_URL="mysql+aiomysql://u:p@tmb-maria:3306/t" python:3.12-slim \
+  sh -lc "pip install -e '.[sql]' aiomysql pytest pytest-asyncio pytest-cov pytest-mock && pytest tests/test_sql_storage.py"
+
+docker rm -f tmb-pg tmb-maria && docker network rm tmb-net
+```
+
+The suite is verified against **PostgreSQL 16** and **MariaDB 12.3.2** this way. Each live
+parameter creates its table via `create_schema()` and drops it on teardown, so runs stay
+isolated even on a shared database.
+
 ### Writing Tests
 
 ```python
@@ -135,8 +180,8 @@ class TestFeature:
         # Your test here
         assert True
     
-    @pytest.mark.asyncio
     async def test_async_feature(self, builder):
+        # asyncio_mode = "auto": async tests need no @pytest.mark.asyncio marker.
         result = await builder.build_async()
         assert result is not None
 ```
@@ -174,6 +219,11 @@ class MyStorage(BaseStorage):
     
     # Implement other required methods
 ```
+
+> **Note:** A production-ready async SQL backend already ships as
+> `telegram_menu_builder.storage.SQLAlchemyStorage` (PostgreSQL/Supabase, MySQL/MariaDB,
+> SQLite) — see the [SQL storage guide](guide/sql-storage.md). You only need a custom
+> backend for stores it doesn't cover yet (e.g. Redis).
 
 ### Error Handling
 

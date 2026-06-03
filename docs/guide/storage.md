@@ -125,10 +125,11 @@ A production-ready async SQL backend ships as
 [`SQLAlchemyStorage`][telegram_menu_builder.storage.sqlalchemy.SQLAlchemyStorage].
 It persists callbacks in a relational database via SQLAlchemy 2.0 async (Core)
 and works across PostgreSQL/Supabase, MySQL/MariaDB, and SQLite from a single
-implementation. Unlike `MemoryStorage`, it is safe for concurrent async tasks
-and survives process restarts. Install the `[sql]` extra (which bundles
-SQLAlchemy + `aiosqlite`), plus the matching driver for your database
-(`[postgres]` for PostgreSQL/Supabase, `[mysql]` for MySQL/MariaDB):
+implementation. Unlike `MemoryStorage`, it is safe for concurrent async tasks,
+survives process restarts, and is verified against **PostgreSQL 16** and
+**MariaDB 12.3.2**. Install the `[sql]` extra (which bundles SQLAlchemy +
+`aiosqlite`), plus the matching driver for your database (`[postgres]` for
+PostgreSQL/Supabase, `[mysql]` for MySQL/MariaDB — or the pure-Python `aiomysql`):
 
 ```python
 from telegram_menu_builder.storage import SQLAlchemyStorage

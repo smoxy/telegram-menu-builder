@@ -24,25 +24,36 @@ implementation) before writing anything. New backends subclass `BaseStorage`.
    - Match the type signatures from the protocol exactly (`dict[str, Any]`,
      `int | None`, `bool`, `list[str]`). Keep `mypy strict` + `pyright strict` clean.
    - Google-style docstrings, 100-char lines.
-2. **Lazy / guarded import of the optional dependency.** Import the third-party package
-   (e.g. `redis.asyncio`, `sqlalchemy`/`aiosqlite`) inside the module or `__init__`
-   behind a `try/except ImportError`, and raise a clear `ImportError` that points the
-   user at the matching extra, e.g.:
+2. **Keep the backend module's imports normal.** Import the third-party package
+   (`sqlalchemy`, `aiosqlite`, `redis.asyncio`, …) at module top level — this keeps strict
+   typing clean (no `Any` leaking from guarded fallbacks). The module is only ever imported
+   through the lazy export in step 3, so a missing dependency never breaks
+   `import telegram_menu_builder`.
+
+   The extras already exist in `pyproject.toml`: `[redis]` (`redis>=5.0`), `[sql]`
+   (`sqlalchemy[asyncio]>=2.0.30,<3.0`, `aiosqlite>=0.19`), `[postgres]` (`asyncpg>=0.29`),
+   and `[mysql]` (`asyncmy>=0.2.9`).
+3. **Export it lazily (PEP 562).** In both `src/telegram_menu_builder/storage/__init__.py`
+   and the package `src/telegram_menu_builder/__init__.py`: list the class in `__all__` (kept
+   sorted), import it under `if TYPE_CHECKING:` for the type checkers, and resolve the real
+   import inside a module `__getattr__` that raises a clear `ImportError` pointing at the
+   matching extra when the dependency is absent, e.g.:
 
    ```python
-   try:
-       import redis.asyncio as redis
-   except ImportError as exc:  # pragma: no cover
-       raise ImportError(
-           "RedisStorage requires the 'redis' extra: pip install 'telegram-menu-builder[redis]'"
-       ) from exc
+   def __getattr__(name: str) -> Any:
+       if name == "RedisStorage":
+           try:
+               from telegram_menu_builder.storage.redis import RedisStorage
+           except ImportError as exc:  # pragma: no cover
+               raise ImportError(
+                   "RedisStorage requires the 'redis' extra: pip install 'telegram-menu-builder[redis]'"
+               ) from exc
+           return RedisStorage
+       raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
    ```
 
-   The extras already exist in `pyproject.toml`: `[redis]` (`redis>=5.0`) and `[sql]`
-   (`sqlalchemy>=2.0`, `aiosqlite>=0.19`).
-3. **Export it.** Add the class to `src/telegram_menu_builder/storage/__init__.py`
-   (`from ... import <Name>Storage` and its `__all__`) and to the package
-   `src/telegram_menu_builder/__init__.py` `__all__` — keep both `__all__` lists sorted.
+   This way `import telegram_menu_builder` never imports the optional dependency. See
+   `SQLAlchemyStorage` for the reference implementation.
 4. **Add tests** `tests/test_<name>_storage.py` mirroring `tests/test_storage.py`
    (set/get/delete/exists/clear/keys, TTL expiry, defensive copies). Use an in-memory
    fixture for the dependency — `fakeredis` for Redis, an in-memory SQLite URL

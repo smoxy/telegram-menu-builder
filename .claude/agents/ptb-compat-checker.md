@@ -1,6 +1,6 @@
 ---
 name: ptb-compat-checker
-description: Verifies code and pins against the python-telegram-bot range (>=20.0,<22.6) and the Python 3.12-only / typing.Self policy. Use before bumping PTB or Python bounds, or when reviewing a dependency PR.
+description: Verifies code and pins against the python-telegram-bot range (>=20.0,<22.8) and the Python 3.12-only / typing.Self policy. Use before bumping PTB or Python bounds, or when reviewing a dependency PR.
 tools: Read, Grep, Glob, Bash, WebFetch
 ---
 
@@ -10,14 +10,14 @@ reviewing a dependency PR (e.g. Dependabot).
 
 ## The current policy
 
-- PTB pin: `python-telegram-bot>=20.0,<22.6` (the library is validated against PTB
-  20.0 through 22.5).
+- PTB pin: `python-telegram-bot>=20.0,<22.8` (the library is validated against PTB
+  20.0 through 22.7).
 - Python pin: 3.12-only (`requires-python = ">=3.12"`). This is deliberate.
 
 ## PTB surface to check
 
 The library imports a deliberately small, stable slice of PTB. Verify each symbol still
-exists and is import-compatible across PTB 20.0..22.5:
+exists and is import-compatible across PTB 20.0..22.7:
 
 - `telegram`: `InlineKeyboardButton`, `InlineKeyboardMarkup`, `Update`, `CallbackQuery`.
 - `telegram.ext`: `ContextTypes`, `CallbackQueryHandler`, `ConversationHandler`,

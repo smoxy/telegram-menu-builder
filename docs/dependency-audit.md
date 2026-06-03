@@ -1,6 +1,6 @@
 # Dependency Audit
 
-**Audit date:** 2026-06-03
+**Audit date:** 2026-06-04
 
 This page records the dependency and CVE audit for `telegram-menu-builder`. It
 complements the [Security Policy](security.md) and is the target of the
@@ -24,10 +24,10 @@ Dependencies are audited:
 
 ## Runtime dependencies
 
-### `python-telegram-bot` (`>=20.0,<22.6`)
+### `python-telegram-bot` (`>=20.0,<22.8`)
 
 No known CVEs affect the imported surface of `python-telegram-bot` within this
-range. The **upper bound (`<22.6`) is a compatibility ceiling, not a security
+range. The **upper bound (`<22.8`) is a compatibility ceiling, not a security
 pin** — it caps the range to versions verified against this library's API usage,
 and is raised deliberately as new releases are validated.
 
@@ -45,6 +45,31 @@ pydantic's **email-validation regex**, fixed in **2.4.0**.
   transitive or downstream resolver cannot pull a vulnerable pydantic into an
   environment that installs this package.
 
+## Optional storage dependencies
+
+These are **opt-in**: they are installed only when the matching extra is requested
+(`[sql]`, `[postgres]`, `[mysql]`), so they never enter a default install's surface. CI
+installs `[dev,sql]` and the docs build installs `[docs,sql]`, so `SQLAlchemy` + `aiosqlite`
+are in the audited and CI-tested set; the database drivers (`asyncpg`, `asyncmy`) are
+exercised only in opt-in integration runs.
+
+### `SQLAlchemy` (`[sql]`: `sqlalchemy[asyncio]>=2.0.30,<3.0`)
+
+No known CVEs affect the imported surface (async engine + Core constructs). The floor
+`>=2.0.30` is a stability/typing pin (smoother async + strict-typing behaviour), not a
+security pin; the `[asyncio]` extra pulls `greenlet`. Upper bound `<3.0` caps to the
+verified 2.x line.
+
+### Async drivers (`aiosqlite`, `asyncpg`, `asyncmy` / `aiomysql`)
+
+`aiosqlite>=0.19` (`[sql]`), `asyncpg>=0.29` (`[postgres]`) and `asyncmy>=0.2.9` (`[mysql]`)
+have no known CVEs affecting this library's usage. `asyncmy` is a compiled driver; the
+pure-Python `aiomysql` is a supported drop-in alternative (`mysql+aiomysql://`) where no
+`asyncmy` wheel is available — it rides the same SQLAlchemy MySQL dialect.
+`SQLAlchemyStorage` has been verified end-to-end against **PostgreSQL 16** (asyncpg) and
+**MariaDB 12.3.2** (aiomysql) via the parametrized integration suite in
+`tests/test_sql_storage.py`.
+
 ## Internal note: MD5 in `encoding.py`
 
 `CallbackEncoder._generate_key()` calls `hashlib.md5(..., usedforsecurity=False)`
@@ -58,8 +83,10 @@ which documents the rationale inline. See the
 
 | Package               | Version range     | Latest known CVE                          | Status                | Action                                                        |
 | --------------------- | ----------------- | ----------------------------------------- | --------------------- | ------------------------------------------------------------- |
-| python-telegram-bot   | `>=20.0,<22.6`    | None affecting imported surface           | :white_check_mark: OK | Upper bound is a compatibility ceiling; raise as validated.   |
+| python-telegram-bot   | `>=20.0,<22.8`    | None affecting imported surface           | :white_check_mark: OK | Upper bound is a compatibility ceiling; raise as validated.   |
 | pydantic              | `>=2.4,<3.0`      | `CVE-2024-3772` (ReDoS, email validation) | :white_check_mark: OK | Floor `>=2.4` excludes vulnerable `2.0`–`2.3`; not exploitable here (no `EmailStr`). |
+| SQLAlchemy *(opt-in)* | `[sql]` `sqlalchemy[asyncio]>=2.0.30,<3.0` | None affecting imported surface | :white_check_mark: OK | Optional; floor is a stability/typing pin. Only installed via `[sql]`. |
+| aiosqlite / asyncpg / asyncmy *(opt-in)* | `[sql]` / `[postgres]` / `[mysql]` | None affecting usage | :white_check_mark: OK | Optional async drivers; `aiomysql` is a pure-Python alternative to `asyncmy`. |
 
 ## How to run the audit locally
 

@@ -17,9 +17,9 @@ ranges are still correct.
    Upgrading pip first ensures pip's own tooling CVEs are excluded from the report, so
    the findings reflect the project's dependencies rather than a stale pip.
 2. **Verify the pins** in `pyproject.toml` match policy:
-   - `python-telegram-bot>=20.0,<22.6`
+   - `python-telegram-bot>=20.0,<22.8`
    - `pydantic>=2.4,<3.0`
-   - optional extras: `redis>=5.0` `[redis]`; `sqlalchemy>=2.0`, `aiosqlite>=0.19` `[sql]`.
+   - optional extras: `redis>=5.0` `[redis]`; `sqlalchemy[asyncio]>=2.0.30,<3.0`, `aiosqlite>=0.19` `[sql]`; `asyncpg>=0.29` `[postgres]`; `asyncmy>=0.2.9` `[mysql]`.
 3. **Confirm the known/accepted items** still hold:
    - **pydantic CVE-2024-3772** (ReDoS in email validation, fixed in 2.4.0): the `>=2.4`
      floor excludes it. Grep the codebase to confirm the library does **not** use

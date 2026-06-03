@@ -164,6 +164,12 @@ class RedisStorage(BaseStorage):
 
 ## SQL / aiosqlite sketch
 
+!!! tip "A built-in SQL backend already ships"
+    You don't need to hand-roll SQL: `telegram_menu_builder.storage.SQLAlchemyStorage`
+    (SQLAlchemy 2.0 async) covers PostgreSQL/Supabase, MySQL/MariaDB, and SQLite — see the
+    [SQL storage guide](../guide/sql-storage.md). The sketch below stays useful as a minimal,
+    dependency-light illustration of the `BaseStorage` contract.
+
 SQL backends have no built-in TTL, so store an absolute expiry timestamp
 alongside the payload and check it on read. Persistent entries (`ttl is None`)
 get a `NULL` expiry.

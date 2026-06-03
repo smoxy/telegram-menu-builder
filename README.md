@@ -38,8 +38,8 @@ incoming callbacks and dispatches them to your handlers.
 pip install telegram-menu-builder
 ```
 
-Optional extras: `telegram-menu-builder[redis]`, `[sql]`, `[dev]`, `[docs]`. See
-[Installation](docs/installation.md).
+Optional extras: `telegram-menu-builder[redis]`, `[sql]` (plus `[postgres]` / `[mysql]` drivers),
+`[dev]`, `[docs]`. See [Installation](docs/installation.md).
 
 ```python
 from telegram import Update
@@ -99,8 +99,8 @@ users = MenuBuilder().add_item("Add user", handler="add_user").add_back_button()
 main = MenuBuilder().add_submenu("👥 Users", users)
 ```
 
-**Bring your own storage** — subclass `BaseStorage` (or satisfy the `StorageBackend` protocol) and
-pass it in; only the in-memory backend ships built-in:
+**Bring your own storage** — in-memory and SQL backends ship built-in; for anything else (e.g.
+Redis) subclass `BaseStorage` (or satisfy the `StorageBackend` protocol) and pass it in:
 
 ```python
 from telegram_menu_builder import MenuBuilder

@@ -7,15 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-06-03
-
 ### Added
 - Built-in async SQL storage backend (`SQLAlchemyStorage`) for PostgreSQL/Supabase, MySQL/MariaDB,
   and SQLite via SQLAlchemy 2.0 (async); new optional extras `[postgres]` and `[mysql]`; explicit
   schema management via `create_schema()`/`drop_schema()`.
+- `SQLAlchemyStorage` is now verified end-to-end against live **PostgreSQL 16** and
+  **MariaDB 12.3.2**. The SQL test suite (`tests/test_sql_storage.py`) is parametrized to run
+  the full behavioral suite against any database given by `TMB_TEST_POSTGRES_URL` /
+  `TMB_TEST_MYSQL_URL`, falling back to in-memory SQLite by default.
 
 ### Changed
 - The `[sql]` extra now pins `sqlalchemy[asyncio]>=2.0.30,<3.0`.
+- Documentation refreshed across the SQL storage, installation, dependency-audit, and
+  development guides: the per-DB driver matrix (including the pure-Python `aiomysql` alternative
+  to `asyncmy`), UTC `expires_at` handling, portable `get_stats`, and Docker-based integration
+  testing. Corrected the documented `python-telegram-bot` range to `>=20.0,<22.8`.
 
 ## [0.2.0] - 2026-06-03
 

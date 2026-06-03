@@ -21,7 +21,7 @@ architecture map, command list, conventions, and the encoding/async details.
 | --- | --- |
 | `type-strictness-reviewer` | After writing or editing any `src/` code, before committing. Runs mypy/pyright/ruff/black checks, verifies docstrings + `Self` returns, flags `# type: ignore` / `Any`. |
 | `test-author` | When adding a feature or when coverage drops. Writes class-based pytest tests matching repo conventions, aiming for 90%+ coverage on changed modules. |
-| `ptb-compat-checker` | Before bumping the python-telegram-bot or Python bounds, or when reviewing a dependency PR. Verifies the PTB `>=20.0,<22.6` range and the Python 3.12-only / `typing.Self` policy. |
+| `ptb-compat-checker` | Before bumping the python-telegram-bot or Python bounds, or when reviewing a dependency PR. Verifies the PTB `>=20.0,<22.8` range and the Python 3.12-only / `typing.Self` policy. |
 
 ## Skills (`.claude/skills/`)
 

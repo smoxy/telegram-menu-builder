@@ -19,6 +19,11 @@ handling, and queries — is shared. Reach for it when you need callbacks to out
 a single process: multi-worker deployments, horizontally scaled bots, or anything
 that must survive a redeploy.
 
+!!! success "Verified against real databases"
+    The full behavioral suite runs on SQLite and is verified end-to-end against
+    **PostgreSQL 16** (via `asyncpg`) and **MariaDB 12.3.2** (via `aiomysql`). See the
+    development guide's *Integration tests against real databases* section to reproduce it.
+
 !!! note "When inline is enough"
     Small callbacks ride *inline* in the 64-byte `callback_data` and never touch
     storage at all — those survive restarts regardless of backend. A SQL backend
@@ -44,6 +49,12 @@ optional backend (Redis + SQL + both drivers) at once:
 ```bash
 pip install "telegram-menu-builder[all]"
 ```
+
+!!! note "MySQL driver: `asyncmy` or `aiomysql`"
+    `[mysql]` installs `asyncmy`, a fast compiled driver. If it has no prebuilt wheel for
+    your platform (building from source needs a C toolchain), install the pure-Python
+    `aiomysql` instead and use the `mysql+aiomysql://` scheme — the backend behaves
+    identically because both ride SQLAlchemy's MySQL dialect.
 
 !!! note "Supabase"
     Supabase is plain PostgreSQL. Use its **Postgres connection string** with the
@@ -228,6 +239,13 @@ async with SQLAlchemyStorage(database_url="sqlite+aiosqlite:///bot.db") as stora
   pushed down to the database: `*` maps to `%` and `?` maps to `_`. It does **not**
   support `fnmatch`-style `[seq]` character classes the way `MemoryStorage.keys()`
   does. Stick to `*` and `?` for portable patterns.
+- **Timezone handling is normalized to UTC.** `expires_at` is always stored and compared in
+  UTC. PostgreSQL uses a real `TIMESTAMPTZ`; SQLite and MySQL/MariaDB have no true
+  timezone-aware type, so the `UtcDateTime` decorator stores UTC and re-attaches UTC `tzinfo`
+  on read — you never see naive datetimes, and TTL comparisons stay correct on every backend.
+- **`get_stats()` is portable.** The expired-row count uses `SUM(CASE …)` rather than
+  `COUNT(…) FILTER (…)`, which MySQL/MariaDB do not support, so the same query runs on every
+  dialect.
 
 ## See also
 

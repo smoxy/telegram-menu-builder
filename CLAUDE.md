@@ -22,6 +22,7 @@ licensed, alpha status, Python 3.12-only, with strict typing and Pydantic v2 mod
 | `src/telegram_menu_builder/encoding.py` | `CallbackEncoder`: 3-tier size strategy (INLINE/SHORT/PERSISTENT), deterministic 12-char MD5 dedup key (`usedforsecurity=False`), `encode`/`decode`, `estimate_encoded_size(action)`, `cleanup_callback()`. |
 | `src/telegram_menu_builder/storage/base.py` | `StorageBackend` Protocol (`runtime_checkable`) + `BaseStorage` ABC (`close`/`is_closed`/`_ensure_open`, async context manager). Methods: `set`/`get`/`delete`/`exists`/`clear`/`keys(pattern)`. |
 | `src/telegram_menu_builder/storage/memory.py` | `MemoryStorage(BaseStorage)`: TTL expiry, defensive copies, `cleanup_expired()`, `get_stats()`. Not thread-safe (single-threaded async use). |
+| `src/telegram_menu_builder/storage/sqlalchemy.py` | `SQLAlchemyStorage(BaseStorage)`: async SQLAlchemy 2.0 **Core** backend for PostgreSQL/Supabase, MySQL/MariaDB, SQLite from one code path. Dialect-branched UPSERT (pg/sqlite `on_conflict`, mysql/mariadb `on_duplicate_key`, delete-then-insert fallback), `UtcDateTime` TypeDecorator, `StaticPool` for `:memory:`, owns-vs-borrows engine, explicit `create_schema()`/`drop_schema()` (no implicit DDL), `cleanup_expired()`, **async** `get_stats()` (portable `SUM(CASE)`). Lazily exported via module `__getattr__` so importing the package never imports SQLAlchemy. Pool-safe for concurrent tasks. |
 
 ## Build / test / lint commands
 
@@ -86,9 +87,13 @@ Encoding is deferred to `build_async()` so it always runs inside an async contex
 
 ## Dependency / Python policy
 
-- python-telegram-bot: `>=20.0,<22.6`.
+- python-telegram-bot: `>=20.0,<22.8`.
 - pydantic: `>=2.4,<3.0` (floor raised to 2.4 to exclude CVE-2024-3772; the library
   does not use `EmailStr`, so it was never exploitable — defense in depth).
+- Optional storage extras: `[sql]` = `sqlalchemy[asyncio]>=2.0.30,<3.0` + `aiosqlite`;
+  `[postgres]` = `asyncpg`; `[mysql]` = `asyncmy` (the pure-Python `aiomysql` also works —
+  same SQLAlchemy MySQL dialect, useful where `asyncmy` lacks a wheel). `[redis]` is reserved
+  (bring-your-own today). `SQLAlchemyStorage` is verified against PostgreSQL 16 and MariaDB 12.3.2.
 - Python: 3.12-only (`requires-python = ">=3.12"`). This is deliberate; do not widen it
   in normal docs. See `docs/dependency-audit.md` and `docs/python-compatibility.md` for
   the audit and the compatibility/feasibility analysis.
