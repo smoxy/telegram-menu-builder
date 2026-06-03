@@ -34,7 +34,7 @@ classifiers = [
 dependencies = [
     # Floor pinned to >=2.4 to exclude CVE-2024-3772 (ReDoS in email validation,
     # fixed in 2.4.0). See docs/dependency-audit.md.
-    "python-telegram-bot>=20.0,<22.6",
+    "python-telegram-bot>=20.0,<22.8",
     "pydantic>=2.4,<3.0",
 ]
 
