@@ -1,0 +1,16 @@
+# Code owners for telegram-menu-builder.
+#
+# These owners are automatically requested for review on every pull request
+# touching the matching paths. Combined with the branch ruleset on `main`
+# ("Require a pull request before merging"), this keeps changes reviewable.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository.
+*                       @smoxy
+
+# Security- and supply-chain-sensitive paths (kept explicit for visibility).
+/.github/               @smoxy
+/.github/workflows/     @smoxy
+/pyproject.toml         @smoxy
+/SECURITY.md            @smoxy
