@@ -83,7 +83,7 @@ all = [
 
 [project.urls]
 Homepage = "https://github.com/smoxy/telegram-menu-builder"
-Documentation = "https://telegram-menu-builder.readthedocs.io"
+Documentation = "https://smoxy.github.io/telegram-menu-builder/"
 Repository = "https://github.com/smoxy/telegram-menu-builder"
 "Bug Tracker" = "https://github.com/smoxy/telegram-menu-builder/issues"
 
