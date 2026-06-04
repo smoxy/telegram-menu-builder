@@ -11,7 +11,9 @@ architecture map, command list, conventions, and the encoding/async details.
    No blanket `# type: ignore`, no leaking `Any`.
 3. Keep 100-char lines and Google-style docstrings on every new or changed public API.
    Builder mutators return `Self`.
-4. Use conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`, ...).
+4. Use conventional commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`, `ci:`, ...). Commits are
+   **local only — never push** (the user pushes; `.github/workflows/` changes need an SSH push) and
+   **never co-authored** (no `Co-Authored-By` / attribution trailer).
 5. This is a published PyPI package. Treat any public-API change as potentially breaking
    and record it under `## [Unreleased]` in `CHANGELOG.md`.
 
@@ -31,3 +33,4 @@ architecture map, command list, conventions, and the encoding/async details.
 | `dependency-audit` | "audit dependencies", "check for CVEs", on a Dependabot PR, or before a release. Runs `pip-audit`, verifies pins, updates `docs/dependency-audit.md`. |
 | `add-storage-backend` | "add a storage backend", "implement Redis storage", "implement SQL storage". Scaffolds a `BaseStorage` subclass plus matching tests and docs. |
 | `add-example` | "add an example", "demo this feature". Adds a runnable bot under `examples/` matching `examples/simple_menu.py` style. |
+| `ship` | Any feature, non-trivial fix, or release. The full develop→verify→document→commit→release process: plan mode + parallel Explore agents → TDD via a parallel multi-agent Workflow (Red→Green→Verify→Docs) → strict gates → live Docker validation with parallel subagents → docs → **local commit (never pushed, never co-authored)** → release. |

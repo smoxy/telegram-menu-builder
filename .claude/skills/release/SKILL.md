@@ -34,7 +34,8 @@ locally; it deliberately **stops before** pushing or publishing.
 5. **Run the full check suite** and ensure everything is green:
    `make format && make lint && make type-check && make test && make audit`.
 6. **Build and verify the artifacts**: `make build` then `twine check dist/*`.
-7. **Commit**: `git commit -am "chore(release): vX.Y.Z"`.
+7. **Commit**: `git commit -am "chore(release): vX.Y.Z"`. **Never** add a `Co-Authored-By` /
+   attribution trailer (single-author history), and **never push** — the user pushes.
 8. **Tag**: `git tag vX.Y.Z`.
 9. **STOP.** Do not push and do not publish automatically. Tell the user to run
    `git push --follow-tags` and to create the GitHub Release (CI publishes to PyPI from
