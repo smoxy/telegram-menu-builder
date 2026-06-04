@@ -77,9 +77,11 @@ nav:
       - Menu Building: guide/menu-building.md
       - Callback Routing: guide/routing.md
       - ConversationHandler Integration: conversation_handler_guide.md
+      - Application-free Menus: guide/static-menus.md
       - Storage Backends: guide/storage.md
       - SQL Storage: guide/sql-storage.md
       - Redis & Valkey Storage: guide/redis-storage.md
+      - Testing: guide/testing.md
   - Advanced:
       - Callback Encoding Internals: advanced/encoding.md
       - Custom Storage Backends: advanced/custom-storage.md
@@ -89,7 +91,9 @@ nav:
       - Types & Models: api/types.md
       - Encoding: api/encoding.md
       - Storage: api/storage.md
+      - Testing: api/testing.md
   - Project:
+      - FAQ: faq.md
       - Security: security.md
       - Dependency & CVE Audit: dependency-audit.md
       - Python Compatibility: python-compatibility.md

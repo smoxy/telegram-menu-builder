@@ -105,6 +105,47 @@ stats = storage.get_stats()
     Data is also lost on process restart — `Short`/`Persistent` callbacks
     created before a restart will fail to decode afterwards.
 
+## Atomic claim (multi-operator)
+
+Some menus must hand a resource to exactly **one** user even when several tap the
+same button at the same moment — claiming a support ticket, picking up an order, or
+locking a document while one operator edits it. The storage layer exposes a
+set-if-absent primitive for this: [`add(key, data, ttl)`][telegram_menu_builder.storage.base.StorageBackend.add]
+stores `data` **only if `key` is absent** (an expired value counts as absent) and
+returns `True` for the single caller that won, `False` for everyone who raced and lost.
+
+[`MenuRouter`](routing.md) wraps this as a single-winner lock keyed by user:
+
+```python
+won = await router.claim("ticket:42", user_id=update.effective_user.id, ttl=900)
+if won:
+    await update.callback_query.answer("You picked up this ticket.")
+else:
+    holder = await router.who_claimed("ticket:42")
+    await update.callback_query.answer(
+        f"Already taken by user {holder['user_id']}.", show_alert=True
+    )
+```
+
+- `claim(key, user_id, *, ttl=3600)` returns `True` only for the winner. It stores
+  `{"user_id": user_id, "claimed_at": <UTC ISO8601>}` under `key`; once the `ttl`
+  elapses the key is reclaimable and the next caller can win it again. Pass `ttl=None`
+  for a claim that never expires.
+- `who_claimed(key)` returns the current claim record (e.g.
+  `{"user_id": 7, "claimed_at": ...}`), or `None` if the key is unclaimed or its claim
+  has expired.
+- `release(key)` frees the key for a future `claim()`, returning `True` if a claim was
+  removed and `False` if the key was not claimed.
+
+!!! warning "Atomicity depends on the backend"
+    `MemoryStorage`, `RedisStorage`, and `SQLAlchemyStorage` all implement `add()`
+    **atomically** — Redis/Valkey via `SET NX`, the SQL backends via
+    `INSERT ... ON CONFLICT DO NOTHING`, and `MemoryStorage` within a single event loop.
+    The `BaseStorage` default `add()` is a **non-atomic** `exists`-then-`set` convenience
+    so older custom backends keep working; it is *not* a concurrency primitive. A custom
+    backend that needs single-winner semantics across concurrent tasks or processes MUST
+    override `add()` with a genuinely atomic set-if-absent.
+
 ## Lifecycle
 
 `MemoryStorage` (and any `BaseStorage` subclass) supports `close()` and the

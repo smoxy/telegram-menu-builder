@@ -28,9 +28,13 @@ incoming callbacks and dispatches them to your handlers.
 - 🔄 **Unlimited nesting** — submenus and navigation (back / next / exit / cancel) buttons.
 - 🧩 **Pluggable storage** — built-in in-memory, async SQL, and Redis/Valkey backends are included;
   or implement the `StorageBackend` protocol (or subclass `BaseStorage`) for your own.
+- 🪄 **Application-free output** — `to_markup()` / `to_raw()` build a `telegram.InlineKeyboardMarkup`
+  or a plain Bot API dict synchronously, with no PTB `Application`, event loop, or storage required —
+  share one menu definition across codebases.
 - 🔐 **Strict typing** — full type hints, validated with both `mypy --strict` and `pyright`
   (Pydantic v2 models), shipped with `py.typed`.
-- 🧪 **Well tested** — ~90% coverage, CI on every push and pull request.
+- 🧪 **Well tested** — ~90% coverage, CI on every push and pull request, plus a
+  `telegram_menu_builder.testing` module to drive handlers with no live Telegram.
 
 ## 🚀 Quick start
 
@@ -186,6 +190,8 @@ are tracked in the [dependency audit](docs/dependency-audit.md) (for example, py
 - ✅ Built-in Redis backend via `redis-py` that also speaks **Valkey** (the RESP-compatible Redis
   fork we recommend), verified against Redis 7.4.9 & Valkey 8.1.8 — install `[redis]` (see
   [Redis/Valkey storage](docs/guide/redis-storage.md))
+- ✅ Application-free build (`to_markup` / `to_raw`) + atomic multi-operator claim + testing helpers
+  (v0.4.0)
 - 📅 Helpers for pagination and form/wizard flows
 
 ## 📝 License
