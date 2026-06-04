@@ -60,6 +60,41 @@ class MemoryStorage(BaseStorage):
             # Remove expiry if it existed before
             del self._expiry[key]
 
+    async def add(self, key: str, data: dict[str, Any], ttl: int | None = None) -> bool:
+        """Atomically store data only if the key is absent (set-if-absent).
+
+        A key whose TTL has already elapsed is treated as absent and may be
+        reclaimed. The existence check and the store happen with NO ``await``
+        between them, so under a single event loop this is effectively atomic:
+        two coroutines racing on the same key yield exactly one ``True``.
+
+        Args:
+            key: Unique identifier for the data
+            data: Dictionary to store
+            ttl: Time-to-live in seconds (None = no expiration)
+
+        Returns:
+            True if this call stored the value, False if a live (non-expired)
+            value already existed for the key.
+
+        Raises:
+            RuntimeError: If storage is closed
+        """
+        self._ensure_open()
+
+        # A live (present and not-yet-expired) value blocks the claim.
+        if key in self._data and not (key in self._expiry and time.time() > self._expiry[key]):
+            return False
+
+        # Absent or expired: claim it. No await between the check and the store,
+        # so a concurrent add() cannot interleave under a single event loop.
+        self._data[key] = data.copy()
+        if ttl is not None:
+            self._expiry[key] = time.time() + ttl
+        elif key in self._expiry:
+            del self._expiry[key]
+        return True
+
     async def get(self, key: str) -> dict[str, Any] | None:
         """Retrieve data from memory.
 

@@ -43,6 +43,28 @@ class StorageBackend(Protocol):
         """
         ...
 
+    async def add(self, key: str, data: dict[str, Any], ttl: int | None = None) -> bool:
+        """Atomically store data only if the key is absent (set-if-absent).
+
+        This is the single-winner primitive behind
+        :meth:`~telegram_menu_builder.router.MenuRouter.claim`: a concurrent set
+        of callers racing on the same key must see exactly one ``True`` return.
+        An expired (non-live) value counts as absent and may be reclaimed.
+
+        Args:
+            key: Unique identifier for the data
+            data: Dictionary to store (must be JSON-serializable)
+            ttl: Time-to-live in seconds (None = no expiration)
+
+        Returns:
+            True if this call stored the value, False if a live (non-expired)
+            value already existed for the key.
+
+        Raises:
+            StorageError: If storage operation fails
+        """
+        ...
+
     async def get(self, key: str) -> dict[str, Any] | None:
         """Retrieve data by key.
 
@@ -123,6 +145,38 @@ class BaseStorage(ABC):
     @abstractmethod
     async def set(self, key: str, data: dict[str, Any], ttl: int | None = None) -> None:
         """Store data with an optional TTL."""
+
+    async def add(self, key: str, data: dict[str, Any], ttl: int | None = None) -> bool:
+        """Store data only if the key is absent (default, NON-ATOMIC implementation).
+
+        This default ``exists``-then-``set`` implementation is provided so that
+        custom backends written before ``add`` existed keep working without
+        changes. It is a convenience, not a concurrency primitive.
+
+        Warning:
+            This default is NOT atomic: it awaits :meth:`exists` and then
+            :meth:`set`, and another coroutine (or process) can interleave
+            between the two. Concurrency-safe backends MUST override ``add`` with
+            a genuinely atomic set-if-absent (e.g. Redis ``SET NX`` or a
+            single-transaction conditional INSERT) so that racing callers see
+            exactly one ``True``.
+
+        Args:
+            key: Unique identifier for the data
+            data: Dictionary to store (must be JSON-serializable)
+            ttl: Time-to-live in seconds (None = no expiration)
+
+        Returns:
+            True if this call stored the value, False if a live (non-expired)
+            value already existed for the key.
+
+        Raises:
+            StorageError: If storage operation fails
+        """
+        if await self.exists(key):
+            return False
+        await self.set(key, data, ttl)
+        return True
 
     @abstractmethod
     async def get(self, key: str) -> dict[str, Any] | None:

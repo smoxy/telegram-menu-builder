@@ -40,7 +40,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.sql import ColumnElement
@@ -364,6 +364,101 @@ class SQLAlchemyStorage(BaseStorage):
         async with self._engine.begin() as conn:
             await conn.execute(delete(self._table).where(self._table.c.key == values["key"]))
             await conn.execute(self._table.insert().values(**values))
+
+    async def add(self, key: str, data: dict[str, Any], ttl: int | None = None) -> bool:
+        """Atomically store ``data`` under ``key`` only if it is absent.
+
+        The whole operation runs inside a SINGLE transaction
+        (``async with self._engine.begin()``) so it is atomic against concurrent
+        callers and the engine's connection pool. Within that transaction it:
+
+        1. DELETEs any row for ``key`` whose TTL has already elapsed
+           (``expires_at IS NOT NULL AND expires_at <= now``), freeing an expired
+           claim so it can be reclaimed; and then
+        2. runs a dialect INSERT that no-ops on a primary-key conflict, mirroring
+           the dialect branches of :meth:`_build_upsert`: PostgreSQL/SQLite use
+           ``INSERT ... ON CONFLICT DO NOTHING``; MySQL/MariaDB use
+           ``INSERT IGNORE``; any other dialect falls back to a plain INSERT and
+           treats an :class:`~sqlalchemy.exc.IntegrityError` as a lost race.
+
+        The boolean result is derived from the INSERT's affected-row count: a row
+        was inserted (won the claim) iff ``rowcount > 0``.
+
+        Args:
+            key: Unique identifier for the data.
+            data: JSON-serializable dictionary to store.
+            ttl: Time-to-live in seconds (``None`` = no expiration).
+
+        Returns:
+            ``True`` if this call stored the value, ``False`` if a live
+            (non-expired) row already existed for the key.
+
+        Raises:
+            RuntimeError: If the storage is closed.
+            StorageError: If the write fails.
+        """
+        self._ensure_open()
+
+        now = _utcnow()
+        expires_at = now + datetime.timedelta(seconds=ttl) if ttl is not None else None
+        values = {"key": key, "value": data, "expires_at": expires_at}
+
+        try:
+            async with self._engine.begin() as conn:
+                # Free an expired claim first so it can be reclaimed in this txn.
+                expires_col = self._table.c.expires_at
+                await conn.execute(
+                    delete(self._table).where(
+                        (self._table.c.key == key)
+                        & (expires_col.is_not(None))
+                        & (expires_col <= now)
+                    )
+                )
+
+                stmt = self._build_insert_ignore(values)
+                if stmt is None:
+                    # Dialect without a native no-op insert: try a plain INSERT and
+                    # treat a primary-key collision as a lost race.
+                    try:
+                        result = await conn.execute(self._table.insert().values(**values))
+                    except IntegrityError:
+                        return False
+                    return result.rowcount > 0
+
+                result = await conn.execute(stmt)
+                return result.rowcount > 0
+        except SQLAlchemyError as exc:
+            raise StorageError(f"Failed to add key {key!r}: {exc}") from exc
+
+    def _build_insert_ignore(self, values: dict[str, Any]) -> Any:
+        """Build a dialect-specific INSERT that no-ops on a primary-key conflict.
+
+        Branches on ``self._engine.dialect.name``, mirroring :meth:`_build_upsert`:
+
+        * ``postgresql`` / ``sqlite``: ``INSERT ... ON CONFLICT DO NOTHING``.
+        * ``mysql`` / ``mariadb``: ``INSERT IGNORE``.
+        * otherwise (fallback): ``None``, signalling :meth:`add` to attempt a
+          plain INSERT and catch :class:`~sqlalchemy.exc.IntegrityError`.
+
+        Args:
+            values: The row values to insert (``key``, ``value``, ``expires_at``).
+
+        Returns:
+            An executable conflict-tolerant insert statement for known dialects,
+            or ``None`` to request the generic INSERT/``IntegrityError`` fallback.
+        """
+        dialect = self._engine.dialect.name
+
+        if dialect in ("postgresql", "sqlite"):
+            pg_or_sqlite = pg_insert if dialect == "postgresql" else sqlite_insert
+            stmt = pg_or_sqlite(self._table).values(**values)
+            return stmt.on_conflict_do_nothing(index_elements=[self._table.c.key])
+
+        if dialect in ("mysql", "mariadb"):
+            return mysql_insert(self._table).values(**values).prefix_with("IGNORE")
+
+        # Fallback for any other dialect: signal plain INSERT to add().
+        return None
 
     async def get(self, key: str) -> dict[str, Any] | None:
         """Retrieve the (non-expired) value stored under ``key``.

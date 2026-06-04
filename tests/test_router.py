@@ -214,6 +214,32 @@ class TestMenuRouter:
         assert router.storage is storage
         assert isinstance(router.encoder, CallbackEncoder)
 
+    async def test_claim_single_winner(self, router):
+        """claim returns True for the first caller and False for a repeat."""
+        assert await router.claim("doc:1", user_id=7) is True
+        assert await router.claim("doc:1", user_id=99) is False
+
+    async def test_who_claimed_returns_owner(self, router):
+        """who_claimed returns the stored claim record including the user_id."""
+        await router.claim("doc:1", user_id=7)
+        claim = await router.who_claimed("doc:1")
+        assert claim is not None
+        assert claim["user_id"] == 7
+
+    async def test_who_claimed_unclaimed_is_none(self, router):
+        """who_claimed returns None when nobody has claimed the key."""
+        assert await router.who_claimed("doc:1") is None
+
+    async def test_release_frees_the_claim(self, router):
+        """release frees the key so a subsequent claim by another user succeeds."""
+        assert await router.claim("doc:1", user_id=7) is True
+        assert await router.release("doc:1") is True
+
+        assert await router.claim("doc:1", user_id=99) is True
+        claim = await router.who_claimed("doc:1")
+        assert claim is not None
+        assert claim["user_id"] == 99
+
     async def test_build_then_route_round_trip(self, storage, context):
         """A menu built with MenuBuilder routes back to the original handler+params."""
         builder = MenuBuilder(storage=storage)

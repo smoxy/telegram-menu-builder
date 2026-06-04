@@ -4,6 +4,7 @@ This module provides a routing system that dispatches callback queries to
 registered handler functions based on the decoded callback data.
 """
 
+import datetime
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
@@ -340,6 +341,56 @@ class MenuRouter:
             List of handler names
         """
         return list(self._handlers.keys())
+
+    async def claim(self, key: str, user_id: int, *, ttl: int | None = 3600) -> bool:
+        """Atomically claim a key for a single user (single-winner lock).
+
+        Backed by :meth:`~telegram_menu_builder.storage.base.StorageBackend.add`,
+        which is an atomic set-if-absent: when several users race to claim the
+        same key, exactly one wins. An expired claim (past its ``ttl``) is
+        reclaimable, so the next caller after expiry can win the key again.
+
+        The stored record is ``{"user_id": user_id, "claimed_at": <UTC ISO8601>}``
+        and can be read back via :meth:`who_claimed`.
+
+        Args:
+            key: The resource identifier being claimed (e.g. ``"doc:1"``).
+            user_id: The Telegram user id attempting the claim.
+            ttl: Time-to-live for the claim in seconds (``None`` = no expiry).
+                Defaults to one hour.
+
+        Returns:
+            ``True`` if this user won the claim, ``False`` if a live claim already
+            existed (held by this or another user).
+        """
+        record = {
+            "user_id": user_id,
+            "claimed_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        }
+        return await self._storage.add(key, record, ttl=ttl)
+
+    async def who_claimed(self, key: str) -> dict[str, Any] | None:
+        """Return the current claim record for ``key``, if any.
+
+        Args:
+            key: The resource identifier to inspect.
+
+        Returns:
+            The stored claim record (e.g. ``{"user_id": 7, "claimed_at": ...}``),
+            or ``None`` if the key is unclaimed or the claim has expired.
+        """
+        return await self._storage.get(key)
+
+    async def release(self, key: str) -> bool:
+        """Release a claim, freeing the key for a future :meth:`claim`.
+
+        Args:
+            key: The resource identifier whose claim should be released.
+
+        Returns:
+            ``True`` if a claim was removed, ``False`` if the key was not claimed.
+        """
+        return await self._storage.delete(key)
 
     @property
     def storage(self) -> StorageBackend:

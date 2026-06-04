@@ -200,6 +200,42 @@ class RedisStorage(BaseStorage):
         except RedisError as exc:
             raise StorageError(f"Failed to set key {key!r}: {exc}") from exc
 
+    async def add(self, key: str, data: dict[str, Any], ttl: int | None = None) -> bool:
+        """Atomically store ``data`` under ``key`` only if it is absent.
+
+        Implemented with a single ``SET ... NX [EX]`` command, which the server
+        applies atomically: the value is written only when the key does not
+        already exist. Because an expired key is gone server-side, ``NX``
+        succeeds again once its TTL has elapsed (expired keys are reclaimable),
+        and concurrent callers see exactly one ``True``.
+
+        Args:
+            key: Unique identifier for the data.
+            data: JSON-serializable dictionary to store.
+            ttl: Time-to-live in seconds (``None`` = no expiration). The server
+                enforces the expiry.
+
+        Returns:
+            ``True`` if this call stored the value, ``False`` if a live
+            (non-expired) value already existed for the key.
+
+        Raises:
+            RuntimeError: If the storage is closed.
+            StorageError: If the write fails.
+        """
+        self._ensure_open()
+        try:
+            return bool(
+                await self._client.set(
+                    self._k(key),
+                    json.dumps(data, separators=(",", ":")),
+                    nx=True,
+                    ex=ttl,
+                )
+            )
+        except RedisError as exc:
+            raise StorageError(f"Failed to add key {key!r}: {exc}") from exc
+
     async def get(self, key: str) -> dict[str, Any] | None:
         """Retrieve the value stored under ``key``.
 

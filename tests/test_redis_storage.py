@@ -125,6 +125,22 @@ class TestRedisStorage:
         assert await storage.delete("k") is True
         assert await storage.delete("k") is False
 
+    async def test_add_set_if_absent(self, storage):
+        """add stores and returns True the first time, False on a live repeat."""
+        assert await storage.add("k", {"user_id": 1}) is True
+        assert await storage.add("k", {"user_id": 2}) is False
+        # The first write wins; the second add must not overwrite it.
+        assert await storage.get("k") == {"user_id": 1}
+
+    async def test_concurrent_add_exactly_one_winner(self, storage):
+        """Concurrent add of the same key yields exactly one True (single winner)."""
+        results = await asyncio.gather(
+            storage.add("k", {"user_id": 1}),
+            storage.add("k", {"user_id": 2}),
+        )
+        assert results.count(True) == 1
+        assert results.count(False) == 1
+
     async def test_clear(self, storage):
         """clear removes all keys in the namespace."""
         await storage.set("a", {"v": 1})
