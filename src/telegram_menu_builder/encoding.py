@@ -109,6 +109,42 @@ class CallbackEncoder:
         except Exception as e:
             raise EncodingError(f"Failed to encode callback data: {e}") from e
 
+    def encode_inline(self, action: MenuAction) -> str:
+        """Encode a MenuAction using only the inline (storage-free) path.
+
+        This is the synchronous counterpart to :meth:`encode`. It builds the same
+        ``{"h": handler, "p": params}`` dict and runs *only* the inline strategy
+        (JSON -> zlib -> base64). Unlike :meth:`encode`, it never spills to storage
+        and performs no ``await``: if the resulting callback_data would not fit
+        inline (i.e. it would otherwise require a storage spill), an
+        :class:`EncodingError` is raised instead.
+
+        Args:
+            action: MenuAction to encode.
+
+        Returns:
+            Encoded callback_data string (``I:``/``IC:`` prefix, max 64 bytes).
+
+        Raises:
+            EncodingError: If the action does not fit within the 64-byte inline
+                budget and would therefore require storage.
+        """
+        data = {
+            "h": action.handler,  # Use short keys to save space
+            "p": action.params,
+        }
+
+        inline_encoded = self._encode_inline(data)
+        if inline_encoded is not None and len(inline_encoded) <= 64:
+            return inline_encoded
+
+        json_size = len(json.dumps(data, separators=(",", ":")).encode("utf-8"))
+        message = (
+            f"Callback for handler {action.handler!r} is {json_size}B encoded and exceeds the "
+            "64B inline budget; it would require storage — use build_async() or shrink the params."
+        )
+        raise EncodingError(message)
+
     async def decode(self, callback_data: str) -> MenuAction:
         """Decode callback_data string back to MenuAction.
 
@@ -152,38 +188,46 @@ class CallbackEncoder:
             raise DecodingError(f"Failed to decode callback data: {e}") from e
 
     def _encode_inline(self, data: dict[str, Any]) -> str | None:
-        """Encode data inline with compression.
+        """Encode data inline, preferring the most compact representation.
+
+        Two inline tiers are considered and the smallest one that fits Telegram's
+        64-byte ``callback_data`` limit wins:
+
+        - ``I:`` carries the minified, ASCII-safe JSON verbatim (no base64
+          overhead). This is the common case for small payloads.
+        - ``IC:`` carries zlib-compressed, base64-encoded JSON. It is only used
+          when compression actually produces a shorter result than the raw JSON
+          (e.g. highly repetitive params).
 
         Args:
-            data: Data dictionary to encode
+            data: Data dictionary to encode.
 
         Returns:
-            Encoded string or None if too large
+            Encoded string, or ``None`` if neither tier fits within 64 bytes.
         """
         try:
-            # Serialize to JSON with minimal separators
+            # Serialize to JSON with minimal separators (ASCII-safe for callback_data).
             json_str = json.dumps(data, separators=(",", ":"), ensure_ascii=True)
             json_bytes = json_str.encode("utf-8")
 
-            # Try compression
+            candidates: list[str] = []
+
+            # Tier 1: raw JSON verbatim (no base64 overhead).
+            raw = f"{self.PREFIX_INLINE}{json_str}"
+            if len(raw.encode("utf-8")) <= 64:
+                candidates.append(raw)
+
+            # Tier 2: zlib + base64, only worthwhile when it beats the raw JSON.
             compressed = zlib.compress(json_bytes, level=9)
+            if len(compressed) < len(json_bytes):
+                b64_encoded = base64.b64encode(compressed).decode("ascii")
+                comp = f"{self.PREFIX_INLINE_COMPRESSED}{b64_encoded}"
+                if len(comp.encode("utf-8")) <= 64:
+                    candidates.append(comp)
 
-            # Use the smaller of compressed vs uncompressed
-            to_encode = compressed if len(compressed) < len(json_bytes) else json_bytes
-            use_compression = len(compressed) < len(json_bytes)
-
-            # Base64 encode
-            b64_encoded = base64.b64encode(to_encode).decode("ascii")
-
-            # Add prefix with compression flag
-            prefix = "IC:" if use_compression else self.PREFIX_INLINE
-            result = f"{prefix}{b64_encoded}"
-
-            # Check size
-            if len(result) <= 64:
-                return result
-
-            return None
+            if not candidates:
+                return None
+            return min(candidates, key=len)
 
         except Exception:
             return None
@@ -201,25 +245,17 @@ class CallbackEncoder:
             DecodingError: If decoding fails
         """
         try:
-            # Determine if compressed
-            if encoded.startswith("IC:"):
-                use_compression = True
-                b64_str = encoded[3:]
+            if encoded.startswith(self.PREFIX_INLINE_COMPRESSED):
+                # Compressed tier: base64 -> zlib -> JSON.
+                b64_str = encoded[len(self.PREFIX_INLINE_COMPRESSED) :]
+                decoded_bytes = zlib.decompress(base64.b64decode(b64_str))
+                json_str = decoded_bytes.decode("utf-8")
             elif encoded.startswith(self.PREFIX_INLINE):
-                use_compression = False
-                b64_str = encoded[2:]
+                # Raw tier: the payload is the minified JSON verbatim.
+                json_str = encoded[len(self.PREFIX_INLINE) :]
             else:
                 raise DecodingError("Invalid inline encoding prefix")
 
-            # Base64 decode
-            decoded_bytes = base64.b64decode(b64_str)
-
-            # Decompress if needed
-            if use_compression:
-                decoded_bytes = zlib.decompress(decoded_bytes)
-
-            # Parse JSON
-            json_str = decoded_bytes.decode("utf-8")
             result: dict[str, Any] = json.loads(json_str)
             return result
 

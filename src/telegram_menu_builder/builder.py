@@ -8,7 +8,7 @@ import asyncio
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from telegram import InlineKeyboardMarkup
 
@@ -71,16 +71,27 @@ class MenuBuilder:
         ...     .build())
     """
 
-    def __init__(self, storage: StorageBackend | None = None, menu_id: str | None = None) -> None:
+    def __init__(
+        self,
+        storage: StorageBackend | None = None,
+        menu_id: str | None = None,
+        on_oversize: Literal["spill", "error"] = "spill",
+    ) -> None:
         """Initialize menu builder.
 
         Args:
             storage: Storage backend (defaults to MemoryStorage)
             menu_id: Optional menu identifier for tracking
+            on_oversize: Build-time policy for callback data that does not fit
+                Telegram's 64-byte inline budget. ``"spill"`` (the default)
+                stores the payload in ``storage`` and emits a reference;
+                ``"error"`` makes :meth:`build_async` raise :class:`EncodingError`
+                instead, keeping every menu fully inline and storage-free.
         """
         self._storage = storage or MemoryStorage()
         self._encoder = CallbackEncoder(self._storage)
         self._menu_id = menu_id
+        self._on_oversize: Literal["spill", "error"] = on_oversize
 
         self._items: list[_ItemSpec] = []
         self._submenus: dict[int, MenuBuilder] = {}
@@ -373,14 +384,21 @@ class MenuBuilder:
     async def build_async(self) -> InlineKeyboardMarkup:
         """Build the final InlineKeyboardMarkup (async version).
 
+        This is the canonical builder. Pending item specs are encoded here (so
+        encoding always runs inside an async context) and the result is assembled
+        into a grid via the shared layout helper. Callback data that exceeds the
+        64-byte inline budget is spilled to ``storage`` unless this builder was
+        created with ``on_oversize="error"``, in which case an
+        :class:`EncodingError` is raised instead.
+
         Returns:
             InlineKeyboardMarkup ready to use
 
         Raises:
             ValidationError: If menu configuration is invalid
+            EncodingError: If ``on_oversize="error"`` and an item does not fit inline
         """
-        if not self._items and not self._has_navigation_buttons():
-            raise ValidationError("Cannot build empty menu (no items or navigation buttons)")
+        self._require_non_empty()
 
         # Encode all pending item specs into MenuItems. Encoding is deferred from
         # the add_* calls to here so that it always runs inside an async context
@@ -390,90 +408,205 @@ class MenuBuilder:
             if isinstance(spec, _UrlItemSpec):
                 items.append(MenuItem(text=spec.text, url=spec.url))
             else:
-                items.append(
-                    await self._create_menu_item_async(spec.text, spec.handler, spec.params)
+                items.append(await self._encode_callback_item(spec.text, spec.handler, spec.params))
+
+        nav_rows = [
+            [await self._encode_callback_item(btn.text, btn.handler, btn.params) for btn in row]
+            for row in self._navigation_button_rows()
+        ]
+
+        keyboard = self._assemble_grid(items, nav_rows)
+        telegram_keyboard = [[item.to_telegram_button() for item in row] for row in keyboard]
+        return InlineKeyboardMarkup(telegram_keyboard)
+
+    def to_markup(self) -> InlineKeyboardMarkup:
+        """Build the menu synchronously, without an event loop or storage.
+
+        Every callback item is encoded via the inline-only path
+        (:meth:`CallbackEncoder.encode_inline`), so this method runs no ``await``,
+        touches no storage backend, and spawns no worker thread — it is safe to
+        call from an ordinary synchronous function. Because there is no storage
+        spill, any item whose callback data does not fit Telegram's 64-byte inline
+        budget raises :class:`EncodingError`; use :meth:`build_async` for menus
+        that need to spill.
+
+        Returns:
+            InlineKeyboardMarkup ready to use with python-telegram-bot.
+
+        Raises:
+            ValidationError: If menu configuration is invalid (empty menu).
+            EncodingError: If any item does not fit within the 64-byte inline budget.
+        """
+        keyboard = self._build_static_grid()
+        telegram_keyboard = [[item.to_telegram_button() for item in row] for row in keyboard]
+        return InlineKeyboardMarkup(telegram_keyboard)
+
+    def to_raw(self) -> dict[str, Any]:
+        """Build the menu as a plain Telegram Bot API dict, without PTB or storage.
+
+        Like :meth:`to_markup`, this is synchronous and storage-free: items are
+        encoded inline only, and an oversize item raises :class:`EncodingError`.
+        The returned value is a plain ``dict`` matching the Bot API
+        ``reply_markup`` shape and is built directly from :class:`MenuItem`, so it
+        can be consumed without constructing a python-telegram-bot object::
+
+            {"inline_keyboard": [[{"text": ..., "callback_data": ...}], ...]}
+
+        URL buttons emit ``{"text": ..., "url": ...}`` instead of ``callback_data``.
+
+        Returns:
+            A JSON-serializable dict with a single ``"inline_keyboard"`` key.
+
+        Raises:
+            ValidationError: If menu configuration is invalid (empty menu).
+            EncodingError: If any item does not fit within the 64-byte inline budget.
+        """
+        keyboard = self._build_static_grid()
+        inline_keyboard: list[list[dict[str, str]]] = []
+        for row in keyboard:
+            raw_row: list[dict[str, str]] = []
+            for item in row:
+                if item.url is not None:
+                    raw_row.append({"text": item.text, "url": item.url})
+                else:
+                    raw_row.append({"text": item.text, "callback_data": item.callback_data or ""})
+            inline_keyboard.append(raw_row)
+        return {"inline_keyboard": inline_keyboard}
+
+    def assert_inline(self) -> None:
+        """Verify every item fits Telegram's 64-byte inline budget, without building.
+
+        This is a cheap pre-flight: it runs the inline-only encoder over every
+        pending item and navigation button but assembles no keyboard. It is useful
+        to fail fast (e.g. in a test) before handing a menu to :meth:`to_markup`.
+
+        Raises:
+            EncodingError: For the first item (or navigation button) whose callback
+                data would not fit inline and would therefore require storage.
+        """
+        for spec in self._items:
+            if isinstance(spec, _CallbackItemSpec):
+                self._encoder.encode_inline(MenuAction(handler=spec.handler, params=spec.params))
+        for row in self._navigation_button_rows():
+            for btn in row:
+                self._encoder.encode_inline(MenuAction(handler=btn.handler, params=btn.params))
+
+    def _build_static_grid(self) -> list[list[MenuItem]]:
+        """Materialize all specs inline (no storage) and assemble the grid.
+
+        Shared by :meth:`to_markup` and :meth:`to_raw`.
+
+        Returns:
+            The grid of encoded MenuItems including navigation rows.
+
+        Raises:
+            ValidationError: If the menu is empty.
+            EncodingError: If any item does not fit within the inline budget.
+        """
+        self._require_non_empty()
+
+        items: list[MenuItem] = []
+        for spec in self._items:
+            if isinstance(spec, _UrlItemSpec):
+                items.append(MenuItem(text=spec.text, url=spec.url))
+            else:
+                callback_data = self._encoder.encode_inline(
+                    MenuAction(handler=spec.handler, params=spec.params)
                 )
+                items.append(MenuItem(text=spec.text, callback_data=callback_data))
 
-        # Build keyboard layout
+        nav_rows = [
+            [
+                MenuItem(
+                    text=btn.text,
+                    callback_data=self._encoder.encode_inline(
+                        MenuAction(handler=btn.handler, params=btn.params)
+                    ),
+                )
+                for btn in row
+            ]
+            for row in self._navigation_button_rows()
+        ]
+
+        return self._assemble_grid(items, nav_rows)
+
+    def _assemble_grid(
+        self, items: Sequence[MenuItem], nav_rows: Sequence[Sequence[MenuItem]]
+    ) -> list[list[MenuItem]]:
+        """Arrange already-encoded items into a grid and append navigation rows.
+
+        This is the single source of truth for layout (columns/max_rows) and is
+        shared by :meth:`build_async`, :meth:`to_markup`, and :meth:`to_raw`.
+
+        Args:
+            items: Already-encoded body items, in order.
+            nav_rows: Already-encoded navigation rows to append after the body.
+
+        Returns:
+            The assembled grid of MenuItem rows.
+        """
         keyboard: list[list[MenuItem]] = []
-
-        # Arrange items in grid
         current_row: list[MenuItem] = []
         for item in items:
             current_row.append(item)
 
-            # Check if row is complete
             if len(current_row) >= self._layout.columns:
                 keyboard.append(current_row)
                 current_row = []
 
-            # Check max rows limit
             if self._layout.max_rows and len(keyboard) >= self._layout.max_rows:
                 break
 
-        # Add remaining items
         if current_row:
             keyboard.append(current_row)
 
-        # Add navigation buttons
-        nav_rows = await self._build_navigation_buttons()
-        keyboard.extend(nav_rows)
+        keyboard.extend([list(row) for row in nav_rows])
+        return keyboard
 
-        # Convert to Telegram format
-        telegram_keyboard = [[item.to_telegram_button() for item in row] for row in keyboard]
+    def _require_non_empty(self) -> None:
+        """Raise if the menu has neither items nor navigation buttons."""
+        if not self._items and not self._has_navigation_buttons():
+            raise ValidationError("Cannot build empty menu (no items or navigation buttons)")
 
-        return InlineKeyboardMarkup(telegram_keyboard)
-
-    async def _create_menu_item_async(
+    async def _encode_callback_item(
         self, text: str, handler: str, params: dict[str, Any]
     ) -> MenuItem:
-        """Create a MenuItem with encoded callback data (async version)."""
-        action = MenuAction(handler=handler, params=params)
-        callback_data = await self._encoder.encode(action)
+        """Create a MenuItem with encoded callback data (async, may spill).
 
+        Honors ``on_oversize``: ``"error"`` uses the inline-only encoder (which
+        raises on oversize), while ``"spill"`` uses the full encoder that falls
+        back to storage.
+        """
+        action = MenuAction(handler=handler, params=params)
+        if self._on_oversize == "error":
+            return MenuItem(text=text, callback_data=self._encoder.encode_inline(action))
+        callback_data = await self._encoder.encode(action)
         return MenuItem(text=text, callback_data=callback_data)
 
-    async def _build_navigation_buttons(self) -> list[list[MenuItem]]:
-        """Build navigation button rows."""
-        rows: list[list[MenuItem]] = []
+    def _navigation_button_rows(self) -> list[list[NavigationButton]]:
+        """Return navigation buttons grouped into their keyboard rows.
 
-        # Back/Next buttons (same row)
-        back_next_row: list[MenuItem] = []
+        Encoding-free: the rows hold the raw :class:`NavigationButton` specs so
+        each build path (sync or async) can encode them as appropriate. Back/Next
+        share one row; Exit (xor Cancel) occupies its own trailing row.
 
+        Returns:
+            The navigation rows, omitting any that have no buttons.
+        """
+        rows: list[list[NavigationButton]] = []
+
+        back_next_row: list[NavigationButton] = []
         if self._navigation.back_button:
-            item = await self._create_menu_item_async(
-                self._navigation.back_button.text,
-                self._navigation.back_button.handler,
-                self._navigation.back_button.params,
-            )
-            back_next_row.append(item)
-
+            back_next_row.append(self._navigation.back_button)
         if self._navigation.next_button:
-            item = await self._create_menu_item_async(
-                self._navigation.next_button.text,
-                self._navigation.next_button.handler,
-                self._navigation.next_button.params,
-            )
-            back_next_row.append(item)
-
+            back_next_row.append(self._navigation.next_button)
         if back_next_row:
             rows.append(back_next_row)
 
-        # Exit/Cancel button (separate row)
         if self._navigation.exit_button:
-            item = await self._create_menu_item_async(
-                self._navigation.exit_button.text,
-                self._navigation.exit_button.handler,
-                self._navigation.exit_button.params,
-            )
-            rows.append([item])
+            rows.append([self._navigation.exit_button])
         elif self._navigation.cancel_button:
-            item = await self._create_menu_item_async(
-                self._navigation.cancel_button.text,
-                self._navigation.cancel_button.handler,
-                self._navigation.cancel_button.params,
-            )
-            rows.append([item])
+            rows.append([self._navigation.cancel_button])
 
         return rows
 
