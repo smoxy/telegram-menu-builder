@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-04
+
+### Added
+- Synchronous, storage-free build surface on `MenuBuilder` for application-free / budget-enforced
+  menus: `to_markup()` returns a `telegram.InlineKeyboardMarkup`, `to_raw()` returns a plain Telegram
+  Bot API dict (`{"inline_keyboard": [[...]]}`) built directly from items, and `assert_inline()` is a
+  cheap pre-flight check. All three run with no event loop, no storage access, and no worker thread:
+  every button is encoded inline and any item that would otherwise spill to storage raises
+  `EncodingError` (use `build_async()` for those). The new `on_oversize="spill" | "error"`
+  constructor policy makes `build_async()` raise (via the new sync `CallbackEncoder.encode_inline()`)
+  instead of spilling when set to `"error"`.
+- Atomic set-if-absent primitive `StorageBackend.add(key, data, ttl=None) -> bool` on the storage
+  Protocol, with a non-atomic default implementation on `BaseStorage` (existing custom backends keep
+  working) and concurrency-safe per-backend overrides: `MemoryStorage` (no `await` between check and
+  store, expired keys reclaimable), `RedisStorage` (server-side `SET ... NX`), and `SQLAlchemyStorage`
+  (single transaction that frees expired rows then dialect INSERT no-op-on-conflict). On top of it,
+  `MenuRouter` gains single-winner claim helpers `claim(key, user_id, *, ttl=3600)`,
+  `who_claimed(key)`, and `release(key)`.
+- New `telegram_menu_builder.testing` helper module (stdlib `unittest.mock` only, imported as a
+  submodule): `simulate_tap(router, callback_data, ...)` and `tap(router, handler, /, **params)`
+  fabricate a mock callback-query `Update`, route it, and return a `TapResult`
+  (`answered`, `answer_text`, `edited_text`, `handler_error`); `assert_inline(target)` verifies that
+  a `MenuBuilder`, `InlineKeyboardMarkup`, or raw dict contains only inline `I:`/`IC:` callback
+  buttons (no `S:`/`P:` storage references).
+
 ## [0.3.0] - 2026-06-04
 
 ### Added
@@ -102,7 +127,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example applications
 - Documentation
 
-[Unreleased]: https://github.com/smoxy/telegram-menu-builder/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/smoxy/telegram-menu-builder/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/smoxy/telegram-menu-builder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/smoxy/telegram-menu-builder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/smoxy/telegram-menu-builder/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/smoxy/telegram-menu-builder/releases/tag/v0.1.1
